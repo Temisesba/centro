@@ -146,13 +146,15 @@ a{color:var(--accent)}
 <div id="screenUsuario" class="start-screen hidden">
   <div class="start-logo">🏠 Centro</div>
   <div class="start-card">
+    <div id="errorConexionUsuarios" class="hidden" style="color:var(--red);font-size:13px;margin-bottom:10px"></div>
     <div id="listaUsuarios"></div>
     <div id="formNuevoUsuario" class="hidden" style="margin-top:10px">
       <input id="inpNuevoNombre" type="text" placeholder="Tu nombre">
       <input id="inpNuevaPass" type="password" placeholder="Contraseña (opcional)">
       <button class="btn" onclick="crearUsuarioInicial()">Entrar</button>
     </div>
-    <button id="btnMostrarNuevoUsuario" class="btn btn-sec" onclick="document.getElementById('formNuevoUsuario').classList.remove('hidden');this.classList.add('hidden')" style="margin-top:6px">+ Nuevo usuario</button>
+    <button id="btnMostrarNuevoUsuario" class="btn btn-sec hidden" onclick="document.getElementById('formNuevoUsuario').classList.remove('hidden');this.classList.add('hidden')" style="margin-top:6px">+ Nuevo usuario</button>
+    <button class="btn btn-sec" onclick="cambiarConexionDesdeInicio()" style="margin-top:8px">Cambiar URL de conexión</button>
   </div>
 </div>
 
@@ -220,6 +222,8 @@ a{color:var(--accent)}
         <button class="btn btn-sec btn-sm" onclick="forzarActualizacion()">Forzar actualización</button></div>
       <div class="list-row"><div class="lr-main"><span class="lr-title">Usuario</span><span class="lr-sub" id="usuarioActualTexto">—</span></div>
         <button class="btn btn-sec btn-sm" onclick="cambiarUsuario()">Cambiar</button></div>
+      <div class="list-row"><div class="lr-main"><span class="lr-title">Conexión</span><span class="lr-sub" id="conexionUrlTexto">—</span></div>
+        <button class="btn btn-sec btn-sm" onclick="cambiarConexion()">Cambiar URL</button></div>
       <div class="list-row"><div class="lr-main"><span class="lr-title">Respaldo</span></div>
         <button class="btn btn-sec btn-sm" onclick="exportarRespaldo()">Exportar</button></div>
     </div>
@@ -420,14 +424,24 @@ function guardarWebAppUrl() {
 
 function cargarPantallaUsuarios() {
   mostrarPantalla('screenUsuario');
+  const errorDiv = document.getElementById('errorConexionUsuarios');
+  errorDiv.classList.add('hidden');
   apiCall('listarUsuarios').then(res => {
     const cont = document.getElementById('listaUsuarios');
     cont.innerHTML = '';
-    if (!res.ok || !res.usuarios.length) {
+    if (!res.ok) {
+      errorDiv.textContent = '⚠️ ' + (res.error || 'No se pudo conectar') + ' — revisa la URL de conexión';
+      errorDiv.classList.remove('hidden');
+      document.getElementById('formNuevoUsuario').classList.add('hidden');
+      document.getElementById('btnMostrarNuevoUsuario').classList.add('hidden');
+      return;
+    }
+    if (!res.usuarios.length) {
       document.getElementById('formNuevoUsuario').classList.remove('hidden');
       document.getElementById('btnMostrarNuevoUsuario').classList.add('hidden');
       return;
     }
+    document.getElementById('btnMostrarNuevoUsuario').classList.remove('hidden');
     res.usuarios.forEach(u => {
       const div = document.createElement('div');
       div.className = 'user-chip';
@@ -436,6 +450,16 @@ function cargarPantallaUsuarios() {
       cont.appendChild(div);
     });
   });
+}
+
+function cambiarConexionDesdeInicio() {
+  const nueva = prompt('URL de la Web App (Apps Script → Implementar):', webAppUrl);
+  if (nueva === null) return;
+  const limpia = nueva.trim();
+  if (!limpia) return;
+  webAppUrl = limpia;
+  localStorage.setItem('centro_webAppUrl', limpia);
+  cargarPantallaUsuarios();
 }
 
 function seleccionarUsuario(u) {
@@ -472,10 +496,29 @@ function cambiarUsuario() {
   cargarPantallaUsuarios();
 }
 
+function cambiarConexion() {
+  const nueva = prompt('URL de la Web App (Apps Script → Implementar):', webAppUrl);
+  if (nueva === null) return;
+  const limpia = nueva.trim();
+  if (!limpia) return;
+  webAppUrl = limpia;
+  localStorage.setItem('centro_webAppUrl', limpia);
+  document.getElementById('conexionUrlTexto').textContent = limpia;
+  probarConexion();
+}
+
+function probarConexion() {
+  apiCall('ping').then(res => {
+    if (res && res.ok) alert('✓ Conexión OK');
+    else alert('✗ Sin conexión: ' + (res && res.error ? res.error : 'respuesta vacía'));
+  });
+}
+
 function iniciarApp() {
   mostrarPantalla('app');
   document.getElementById('versionTexto').textContent = 'Versión: ' + VERSION_APP;
   document.getElementById('usuarioActualTexto').textContent = usuarioActual.Nombre;
+  document.getElementById('conexionUrlTexto').textContent = webAppUrl;
   cargarTodo();
 }
 
