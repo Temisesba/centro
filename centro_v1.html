@@ -214,8 +214,8 @@ a{color:var(--accent)}
   <!-- ---- ACUERDOS ---- -->
   <div class="view" id="view-acuerdos">
     <div class="pill-group" id="filtroAcuerdosEstado" style="margin-bottom:10px">
-      <span class="pill on" data-estado="Pendiente" onclick="filtrarAcuerdos('Pendiente')">Pendientes</span>
-      <span class="pill" data-estado="Cumplido" onclick="filtrarAcuerdos('Cumplido')">Cumplidos</span>
+      <span class="pill on" data-estado="pendiente" onclick="filtrarAcuerdos('pendiente')">Pendientes</span>
+      <span class="pill" data-estado="cumplido" onclick="filtrarAcuerdos('cumplido')">Cumplidos</span>
       <span class="pill" data-estado="" onclick="filtrarAcuerdos('')">Todos</span>
     </div>
     <div class="card" id="listaAcuerdos"><div class="loading">Cargando…</div></div>
@@ -718,9 +718,11 @@ function itemsInventario() {
   const deGastos = (DATA.gastos || []).filter(g => g.tipoFila === 'producto' && g.grupo !== 'Ropa').map(g => ({
     nombre: g.concepto, ubicacion: g.ubicacion || '', grupo: g.grupo || 'Alacena', cantidad: g.cantidad, foto: g.fotoProducto, origen: 'gastos', ref: g.rowIndex
   }));
-  const deAppCompleta = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).map(i => ({
-    nombre: i.Nombre, ubicacion: i.Ubicacion || '', grupo: 'General', cantidad: i.Cantidad, foto: i.FotoURL, origen: 'appCompleta', ref: i.ID
-  }));
+  const deAppCompleta = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || [])
+    .filter(i => !(i.Papelera === true || String(i.Papelera).toLowerCase() === 'true'))
+    .map(i => ({
+      nombre: i.Nombre, ubicacion: i.Ubicacion || '', grupo: 'General', cantidad: i.Cantidad, foto: i.FotoURL, origen: 'appCompleta', ref: i.ID
+    }));
   return deGastos.concat(deAppCompleta);
 }
 function renderInventario() {
@@ -765,8 +767,16 @@ function entrarCarpetaInv(nombre) { invRutaActual = invRutaActual ? invRutaActua
 
 function verItemInventario(origen, ref) {
   pedirConfirmacion('Eliminar', '¿Eliminar este objeto del inventario (se va a la papelera)?', () => {
-    if (origen === 'gastos') apiCall('deleteGasto', { rowIndex: ref, eliminadoPor: usuarioActual.Nombre }).then(cargarTodo);
-    else apiCall('deleteRowAppCompleta', { table: 'INVENTARIO_GENERAL', id: ref }).then(cargarTodo);
+    if (origen === 'gastos') {
+      apiCall('deleteGasto', { rowIndex: ref, eliminadoPor: usuarioActual.Nombre }).then(cargarTodo);
+    } else {
+      // saveRowAppCompleta NO hace merge parcial — si no se manda el registro
+      // completo, los campos ausentes se guardan vacíos. Por eso se manda la
+      // fila completa tal como vino de getAllAppCompleta, solo con Papelera=true.
+      const fila = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).find(i => i.ID === ref);
+      if (!fila) return;
+      apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Papelera: true }) }).then(cargarTodo);
+    }
   });
 }
 function elegirGrupoInv(g) {
@@ -890,7 +900,8 @@ function guardarComida() {
 // ============================================================================
 // ACUERDOS — acciones reales de Acuerdos.js (getAllAcuerdos/saveRowAcuerdos/marcarEstado)
 // ============================================================================
-let acuerdosFiltroEstado = 'Pendiente';
+// ACUERDOS.Estado usa minúsculas en el backend real ('pendiente'|'cumplido'|'incumplido').
+let acuerdosFiltroEstado = 'pendiente';
 function filtrarAcuerdos(estado) {
   acuerdosFiltroEstado = estado;
   document.querySelectorAll('#filtroAcuerdosEstado .pill').forEach(p => p.classList.toggle('on', p.dataset.estado === estado));
@@ -898,13 +909,13 @@ function filtrarAcuerdos(estado) {
 }
 function renderAcuerdos() {
   const todos = ((DATA.acuerdos && DATA.acuerdos.acuerdos) || []).slice().sort((a, b) => String(a.FechaLimite || '9999').localeCompare(String(b.FechaLimite || '9999')));
-  const lista = acuerdosFiltroEstado ? todos.filter(a => (a.Estado || 'Pendiente') === acuerdosFiltroEstado) : todos;
+  const lista = acuerdosFiltroEstado ? todos.filter(a => (a.Estado || 'pendiente') === acuerdosFiltroEstado) : todos;
   const cont = document.getElementById('listaAcuerdos');
   if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin acuerdos aquí</div>'; return; }
   cont.innerHTML = lista.map(a => `
     <div class="list-row">
       <div class="lr-main"><span class="lr-title">${escapeHtml(a.Titulo || '')}</span><span class="lr-sub">${a.ConQuien ? 'Con ' + escapeHtml(a.ConQuien) + ' · ' : ''}${escapeHtml(a.FechaLimite || 'sin fecha')}</span></div>
-      ${(a.Estado || 'Pendiente') !== 'Cumplido' ? `<button class="btn btn-sec btn-sm" onclick="marcarAcuerdoCumplido('${a.ID}')">Cumplir</button>` : '<span style="color:var(--green);font-size:13px">✓ Cumplido</span>'}
+      ${(a.Estado || 'pendiente') !== 'cumplido' ? `<button class="btn btn-sec btn-sm" onclick="marcarAcuerdoCumplido('${a.ID}')">Cumplir</button>` : '<span style="color:var(--green);font-size:13px">✓ Cumplido</span>'}
     </div>`).join('');
 }
 function abrirModalAcuerdo() {
@@ -917,15 +928,15 @@ function guardarAcuerdo() {
   if (!titulo) return;
   conEstadoGuardando('btnGuardarAcuerdo', () => apiCall('saveRowAcuerdos', {
     table: 'ACUERDOS', row: {
-      Titulo: titulo, ConQuien: document.getElementById('acConQuien').value,
+      Tipo: 'acuerdo', Titulo: titulo, ConQuien: document.getElementById('acConQuien').value,
       FechaLimite: document.getElementById('acFechaLimite').value,
       Detalles: document.getElementById('acDetalles').value,
-      Estado: 'Pendiente', Usuario: usuarioActual.Nombre
+      Estado: 'pendiente', Usuario: usuarioActual.Nombre
     }
   })).then(res => { if (res && res.ok) { cerrarModal('modalAcuerdo'); cargarTodo(); } });
 }
 function marcarAcuerdoCumplido(id) {
-  apiCall('marcarEstado', { id: id, estado: 'Cumplido' }).then(res => {
+  apiCall('marcarEstado', { id: id, estado: 'cumplido' }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     cargarTodo();
   });
@@ -935,7 +946,7 @@ function marcarAcuerdoCumplido(id) {
 // CONFIGURACIÓN — Mejoras (tabla compartida Acuerdos/App_Completa)
 // ============================================================================
 function renderConfig() {
-  const mejoras = ((DATA.acuerdos && DATA.acuerdos.mejoras) || []).filter(m => !(m.Papelera === true || String(m.Papelera).toLowerCase() === 'true'));
+  const mejoras = ((DATA.acuerdos && DATA.acuerdos.mejoras) || []); // MEJORAS no tiene columna Papelera: eliminarMejora() borra para siempre
   document.getElementById('listaMejoras').innerHTML = mejoras.slice().reverse().map(m => `
     <div class="list-row"><div class="lr-main"><span class="lr-title linkify">${linkify(m.Texto)}</span><span class="lr-sub">${escapeHtml(String(m.Fecha || '')).slice(0, 10)}</span></div>
     <span><button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText('${escapeHtml(m.Texto).replace(/'/g, "\\'")}')">Copiar</button> <button class="btn btn-danger btn-sm" onclick="eliminarMejora('${m.ID}')">Eliminar</button></span></div>`).join('');
