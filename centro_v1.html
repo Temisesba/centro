@@ -158,6 +158,23 @@ a{color:var(--accent)}
   background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;z-index:400;max-width:85vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:410;display:flex;align-items:center;justify-content:center;padding:20px}
 .lightbox-overlay img{max-width:100%;max-height:100%;border-radius:8px}
+.mov-grid{display:grid;grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;background:var(--card2)}
+.mov-grid input,.mov-grid select{padding:7px 8px;border:1px solid var(--border2);border-radius:7px;background:var(--card);color:var(--ink);font-size:12.5px}
+.mov-acc{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.vincular-opt{text-align:left;background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--ink);cursor:pointer}
+.vincular-opt.sel{border-color:var(--accent);color:var(--accent)}
+.estado-card{margin-top:8px;padding:10px;background:var(--card2);border-radius:var(--radius-sm);font-size:11.5px}
+.estado-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px}
+.estado-stats>div{background:var(--card2);border-radius:9px;padding:9px 11px}
+.estado-stats .es-label{font-size:10px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+.estado-stats .es-val{font-weight:700;font-size:14px}
+/* Finanzas puede abrir un modal encima de otro (Conciliación -> +Gasto o -> MSI,
+   o -> vincular) — todos comparten .modal-overlay (mismo z-index:50 base), así
+   que el orden de apilado por defecto seguiría el orden del DOM y no cuál se
+   abrió al final. Se fija a mano el orden que de verdad puede quedar anidado. */
+#modalGasto, #modalFinItem{z-index:55}
+#modalVincular{z-index:58}
+#modalConfirm{z-index:60}
 </style>
 </head>
 <body>
@@ -326,17 +343,35 @@ a{color:var(--accent)}
 </div>
 
 <!-- ============ MODAL: nuevo gasto ============ -->
-<div id="modalGasto" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalGasto')">
+<div id="modalGasto" class="modal-overlay hidden" onclick="if(event.target===this) finCancelarModalGasto()">
   <div class="modal-sheet">
     <div class="modal-title">Nuevo gasto</div>
     <div class="field"><label>Concepto</label><input id="gConcepto" type="text"></div>
     <div class="field"><label>Costo</label><input id="gCosto" type="number" step="0.01"></div>
     <div class="field"><label>Moneda</label><input id="gMoneda" type="text" value="MXN"></div>
     <div class="field"><label>Tienda</label><input id="gTienda" type="text"></div>
-    <div class="field"><label>Pago (efectivo, tarjeta...)</label><input id="gPago" type="text" placeholder="Efectivo, Santander..."></div>
+    <div class="field"><label>Forma de pago</label>
+      <select id="gMetodo" onchange="finOnMetodoChangeGasto()">
+        <option value="">—</option>
+        <option value="Efectivo">💵 Efectivo</option>
+        <option value="Tarjeta">💳 Tarjeta</option>
+      </select>
+    </div>
+    <div class="field" id="gTarjetaWrap" style="display:none">
+      <label>Tarjeta</label><select id="gTarjetaSel" onchange="finOnTarjetaSelChangeGasto()"></select>
+      <p id="gTarjetaHint" style="font-size:11px;color:var(--ink2);margin-top:4px;display:none">Abre 💳 Finanzas en Gastos al menos una vez para ver tus tarjetas aquí.</p>
+    </div>
+    <div class="field" id="gMsiWrap" style="display:none">
+      <label><input type="checkbox" id="gMsi" onchange="finOnMsiChangeGasto()" style="width:auto;margin-right:6px">Es una compra a meses sin intereses (MSI)</label>
+      <input id="gMsiMeses" type="number" min="2" placeholder="¿A cuántos meses?" style="margin-top:6px;display:none">
+    </div>
+    <div class="field"><label>Categoría (opcional)</label><input id="gCategoria" type="text" list="list-cat-gasto" placeholder="Despensa, Transporte...">
+      <datalist id="list-cat-gasto"><option value="🥦 Despensa / comida para casa"><option value="🍽️ Restaurantes, cafés y delivery"><option value="🚆 Transporte"><option value="🏠 Hogar y limpieza"><option value="💡 Servicios y suscripciones"><option value="👗 Ropa, accesorios, belleza y cuidado personal"><option value="💊 Salud"><option value="🎁 Regalos y recuerdos"><option value="❓ Otro / por revisar"></datalist>
+    </div>
+    <div class="field"><label>Notas (opcional)</label><textarea id="gNotas" style="min-height:40px"></textarea></div>
     <div class="field"><label>Fecha</label><input id="gFecha" type="date"></div>
     <div class="modal-actions">
-      <button class="btn btn-sec" onclick="intentarCerrarModal('modalGasto')">Cancelar</button>
+      <button class="btn btn-sec" onclick="finCancelarModalGasto()">Cancelar</button>
       <button class="btn" id="btnGuardarGasto" onclick="guardarGasto()">Guardar</button>
     </div>
   </div>
@@ -441,6 +476,31 @@ a{color:var(--accent)}
   <img id="lightboxImg" src="">
 </div>
 
+<!-- ============ MODAL: vincular movimiento con gasto/pago fijo existente ============ -->
+<div id="modalVincular" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalVincular')">
+  <div class="modal-sheet">
+    <div class="modal-title" id="vincularTitulo">Vincular</div>
+    <p id="vincularMsg" style="font-size:12.5px;color:var(--ink2);margin-bottom:8px"></p>
+    <input type="text" id="vincularBuscar" placeholder="Buscar..." oninput="finFiltrarVincularOpts()" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink);margin-bottom:8px">
+    <div id="vincularOpts" style="max-height:40vh;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="cerrarModal('modalVincular')">Cancelar</button>
+      <button class="btn" onclick="finVincularConfirmar()">Usar esta opción</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: conciliación de estado de cuenta ============ -->
+<div id="modalConciliacion" class="modal-overlay hidden" onclick="if(event.target===this) finCerrarConciliacion()">
+  <div class="modal-sheet" style="max-width:560px">
+    <div class="modal-title">🔎 Conciliación</div>
+    <div id="conciliacionBody"></div>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-sec" onclick="finCerrarConciliacion()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -453,7 +513,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Segunda piedra — vault de Finanzas';
+const VERSION_APP = 'Tercera piedra — conciliación de tarjetas';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -761,8 +821,13 @@ function abrirModalGasto() {
   document.getElementById('gCosto').value = '';
   document.getElementById('gMoneda').value = 'MXN';
   document.getElementById('gTienda').value = '';
-  document.getElementById('gPago').value = '';
+  document.getElementById('gCategoria').value = '';
+  document.getElementById('gNotas').value = '';
   document.getElementById('gFecha').value = hoyISO();
+  document.getElementById('gMetodo').value = '';
+  document.getElementById('gMsi').checked = false;
+  document.getElementById('gMsiMeses').value = '';
+  finOnMetodoChangeGasto();
   abrirModal('modalGasto');
 }
 function guardarGasto() {
@@ -771,10 +836,12 @@ function guardarGasto() {
     costo: document.getElementById('gCosto').value,
     moneda: document.getElementById('gMoneda').value || 'MXN',
     tienda: document.getElementById('gTienda').value,
-    pago: document.getElementById('gPago').value,
+    pago: finPagoBuildGasto(),
+    categoria: document.getElementById('gCategoria').value,
+    notas: document.getElementById('gNotas').value,
     fecha: document.getElementById('gFecha').value,
     quien_paga: usuarioActual.Nombre
-  })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); cargarTodo(); } });
+  })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); finTrasGuardarGasto(res); cargarTodo(); } });
 }
 
 // ============================================================================
@@ -1063,7 +1130,8 @@ const FIN_TIPOS = {
   fijo: { emoji: '🔁', label: 'Pago fijo' },
   tarjeta: { emoji: '💳', label: 'Tarjeta' },
   msi: { emoji: '🗓️', label: 'Compra a MSI' },
-  inversion: { emoji: '💼', label: 'Inversión' }
+  inversion: { emoji: '💼', label: 'Inversión' },
+  estado: { emoji: '🧾', label: 'Estado de cuenta' }
 };
 
 function finF(id) { return document.getElementById(id); }
@@ -1308,10 +1376,10 @@ function finRenderTarjetas() {
   const rows = items.map(c => {
     const proxVenc = c.diaLimite ? finProximaFecha(c.diaLimite) : '';
     const dias = finDiasPara(c.diaLimite);
-    const cargado = finTarjetaCargado(c.id, mk);
+    const estimadoCiclo = finTarjetaEstimadoCiclo(c, mk);
     let creditoHtml = '';
     if (c.ctipo === 'TDC' && parseFloat(c.creditoMax) > 0) {
-      const max = parseFloat(c.creditoMax) || 0, usado = cargado, disp = Math.max(max - usado, 0), pct = Math.min(100, Math.round((usado / max) * 100));
+      const max = parseFloat(c.creditoMax) || 0, usado = finTarjetaSaldoRef(c, mk), disp = Math.max(max - usado, 0), pct = Math.min(100, Math.round((usado / max) * 100));
       creditoHtml = `<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink2)"><span>Disponible (estimado): <strong>${money(disp, c.moneda)}</strong> de ${money(max, c.moneda)}</span><span>${pct}%</span></div>
         <div class="fin-progress"><div style="width:${pct}%;background:${pct > 80 ? 'var(--red)' : 'var(--green)'}"></div></div></div>`;
     }
@@ -1327,7 +1395,7 @@ function finRenderTarjetas() {
         ${fotoBtn}
         <div style="flex:1;min-width:0;cursor:pointer" onclick="finToggleCardCollapse('${cardBodyId}')">
           <div style="font-weight:700;font-size:14px">${finCardTipoEmoji(c)} ${escapeHtml(finCardLabel(c))}</div>
-          <div class="lr-sub">Corte: ${escapeHtml(c.diaCorte || '—')} · Vence: ${proxVenc ? finFmtDate(proxVenc) + (dias !== null ? ' (' + dias + 'd)' : '') : '—'} · Cargado: ${money(cargado, c.moneda)}</div>
+          <div class="lr-sub">Corte: ${escapeHtml(c.diaCorte || '—')} · Vence: ${proxVenc ? finFmtDate(proxVenc) + (dias !== null ? ' (' + dias + 'd)' : '') : '—'} · Estimado del ciclo: ${money(estimadoCiclo, c.moneda)}</div>
         </div>
         <button class="fin-mini-btn" onclick="finOpenForm('tarjeta','${escapeHtml(c.id)}')">✏️</button>
         <button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(c.id)}')">🗑</button>
@@ -1335,6 +1403,7 @@ function finRenderTarjetas() {
       <div id="${cardBodyId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
         ${creditoHtml}${feesHtml}
       </div>
+      ${finRenderEstadosTarjeta(c)}
     </div>`;
   }).join('') || '<div class="empty-state">Sin tarjetas. Agrega tus TDC/TDD/puntos.</div>';
   const tipoBtn = (t, l) => `<span class="pill${finTarjFiltroTipo === t ? ' on' : ''}" onclick="finSetTarjFiltroTipo('${t}')">${l}</span>`;
@@ -1409,19 +1478,17 @@ async function finCancelarFijo(id) {
 async function finReactivarFijo(id) { const f = finItems.find(x => x.id === id); if (!f) return; f.cancelado = false; await finSaveItem(f); }
 async function finAccionFijo(id) {
   const f = finItems.find(x => x.id === id); if (!f) return;
-  if (f.tipoPago === 'tarjeta') { showToast('Este pago se revisa desde Estados de cuenta (próximamente)'); return; }
-  const mk = finMesKey();
-  const periodoDef = (f.pagos || {})[mk] ? mk + '-2' : mk;
-  const periodo = prompt('Periodo a registrar (ej. ' + mk + '):', periodoDef);
-  if (periodo === null || !periodo.trim()) return;
-  const hoy = hoyISO();
-  const fecha = prompt('Fecha de pago:', hoy); if (fecha === null) return;
-  const txt = prompt('Monto pagado:', f.monto || ''); if (txt === null) return;
-  f.pagos = f.pagos || {};
-  let p = periodo.trim();
-  if (f.pagos[p]) { let i = 2, alt = p + '-' + i; while (f.pagos[alt]) { i++; alt = p + '-' + i; } p = alt; }
-  f.pagos[p] = { monto: parseFloat(txt) || 0, fecha: (fecha || hoy).trim() };
-  await finSaveItem(f);
+  if (f.tipoPago === 'tarjeta') { showToast('Este pago se revisa desde 🔎 Conciliar, dentro de Tarjetas'); return; }
+  abrirModalGasto();
+  document.getElementById('gFecha').value = hoyISO();
+  document.getElementById('gCosto').value = Math.round(parseFloat(f.monto) || 0);
+  document.getElementById('gConcepto').value = f.concepto || 'Pago fijo';
+  document.getElementById('gCategoria').value = f.categoria || '';
+  document.getElementById('gNotas').value = (f.nota ? f.nota + ' · ' : '') + 'Generado desde pago fijo ' + f.id;
+  if (f.formaPago === 'Tarjeta' && f.tarjeta) { document.getElementById('gMetodo').value = 'Tarjeta'; finOnMetodoChangeGasto(); document.getElementById('gTarjetaSel').value = f.tarjeta; finOnTarjetaSelChangeGasto(); }
+  else if (f.formaPago === 'Efectivo') { document.getElementById('gMetodo').value = 'Efectivo'; finOnMetodoChangeGasto(); }
+  finPendingFijoId = f.id;
+  showToast('Revisa y guarda el gasto; quedará ligado a este pago fijo');
 }
 function finRenderFijos() {
   const mk = finMesKey();
@@ -1549,7 +1616,13 @@ function finFormTieneDatos() {
   const cont = finF('finFormFields'); if (!cont) return false;
   return [...cont.querySelectorAll('input,select,textarea')].some(el => { if (el.type === 'checkbox') return el.checked; if (el.type === 'file') return el.files && el.files.length; return el.value && String(el.value).trim() !== ''; });
 }
-function finCloseForm() { intentarCerrarModal('modalFinItem', finFormTieneDatos()); }
+function finCloseForm() {
+  if (finFormTieneDatos() && !confirm('¿Cerrar sin guardar los cambios?')) return;
+  // cerrar sin guardar una MSI abierta desde "🗓️" de un movimiento no debe dejar
+  // ese vínculo colgado para la SIGUIENTE compra a MSI que se guarde.
+  if (finFormTipo === 'msi') { finPendingMsiRow = null; finPendingMsiCuotasHistoricas = null; finPendingMsiCardId = null; finPendingMsiPagadas = null; }
+  cerrarModal('modalFinItem');
+}
 
 function finFormFieldsHTML(tipo, it) {
   it = it || {};
@@ -1673,6 +1746,38 @@ function finFormFieldsHTML(tipo, it) {
       + F('Fecha de fin / vencimiento (opcional)', 'pfFechaFin', it.fechaFin, 'type="date"')
       + F('Nota (opcional)', 'pfNota', it.nota, '');
   }
+  if (tipo === 'estado') {
+    const pdfEstado = it.pdfUrl
+      ? `<div class="pf-field"><label>PDF</label><div id="pfPdfTieneUno" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+          <span style="color:var(--green);font-weight:600">✓ Ya tienes un PDF subido</span>
+          <a href="${escapeHtml(it.pdfUrl)}" target="_blank" class="fin-mini-btn" style="text-decoration:none">👁 Ver</a>
+          <button type="button" class="fin-mini-btn" onclick="finMostrarSubirPdf()">🗑 Quitar y subir otro</button>
+        </div></div>`
+      : '';
+    return pdfEstado
+      + `<div class="pf-field" id="pfPdfSubirWrap" style="${it.pdfUrl ? 'display:none' : ''}"><label>Subir PDF</label><input type="file" id="pfPdfFile" accept="application/pdf"></div>`
+      + `<div class="fin-row-actions" style="margin:-2px 0 10px">
+          <button type="button" class="fin-mini-btn" style="color:var(--accent)" onclick="finLeerEstadoIA()">🤖 Leer con IA</button>
+        </div>`
+      + `<div class="pf-field"><label>Tarjeta</label><select id="pfTarjeta">${finCardOptions(it.tarjeta)}</select></div>`
+      + F('Mes', 'pfMes', it.mes || finMesKey(), 'type="month"')
+      + F('Total del estado (saldo / total cargos)', 'pfTotal', it.total, 'type="number" placeholder="0"')
+      + F('Pago mínimo', 'pfMinimo', it.minimo, 'type="number" placeholder="opcional"')
+      + F('Pago para no generar intereses', 'pfNoIntereses', it.noIntereses, 'type="number" placeholder="opcional"')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${F('Fecha de corte', 'pfFechaCorte', it.fechaCorte, 'type="date"')}
+          ${F('Fecha límite', 'pfFechaLimite', it.fechaLimite, 'type="date"')}
+        </div>`
+      + `<div class="pf-field"><label>Estado</label><select id="pfEstado">
+          ${['pendiente', 'parcial', 'conciliado', 'diferencia'].map(x => '<option value="' + x + '"' + ((it.estado || 'pendiente') === x ? ' selected' : '') + '>' + finEstadoLabel(x) + '</option>').join('')}
+        </select></div>`
+      + finMovRowsHTML(it.movimientos || [], 'pfMovRows')
+      + F('Nota', 'pfNota', it.nota, 'placeholder="Detalle del periodo…"')
+      + `<details class="fin-details"><summary>Opciones avanzadas (URL de PDF manual, pegar texto)</summary><div style="margin-top:8px">
+          ${F('PDF adjunto (URL)', 'pfPdfUrl', it.pdfUrl, 'placeholder="URL de Drive o sube PDF arriba"')}
+          ${TA('Transcript / texto pegado (si no tienes el PDF a la mano)', 'pfTranscript', it.transcript, 'placeholder="Pega aquí el texto del estado de cuenta…"')}
+        </div></details>`;
+  }
   return '';
 }
 function finFormaPagoChange() { const v = finFval('pfFormaPago'); const t = finF('pfTarjeta'); if (t) t.style.display = (v === 'Tarjeta') ? 'block' : 'none'; }
@@ -1758,15 +1863,712 @@ async function finFormSave() {
     };
   } else if (t === 'msi') {
     if (!finFval('pfConcepto').trim()) { showToast('¿Qué compraste?'); return; }
-    item = { ...base, concepto: finFval('pfConcepto').trim(), monto: parseFloat(finFval('pfMonto')) || 0, meses: parseInt(finFval('pfMeses')) || 1, tarjeta: finFval('pfTarjeta'), inicio: finFval('pfInicio'), diaLimite: finFval('pfDiaLimite'), nota: finFval('pfNota').trim(), pagadas: (prevItem && prevItem.pagadas) || {} };
+    item = { ...base, concepto: finFval('pfConcepto').trim(), monto: parseFloat(finFval('pfMonto')) || 0, meses: parseInt(finFval('pfMeses')) || 1, tarjeta: finFval('pfTarjeta'), inicio: finFval('pfInicio'), diaLimite: finFval('pfDiaLimite'), nota: finFval('pfNota').trim(), pagadas: { ...((prevItem && prevItem.pagadas) || {}), ...(finPendingMsiPagadas || {}) } };
   } else if (t === 'inversion') {
     if (!finFval('pfInvNombre').trim()) { showToast('Escribe un nombre'); return; }
     item = { ...base, nombre: finFval('pfInvNombre').trim(), institucion: finFval('pfInstitucion').trim(), montoInicial: parseFloat(finFval('pfMontoInicial')) || 0, valorActual: parseFloat(finFval('pfValorActual')) || 0, fecha: finFval('pfFecha'), tasaInteres: parseFloat(finFval('pfTasaInteres')) || 0, fechaFin: finFval('pfFechaFin'), nota: finFval('pfNota').trim() };
+  } else if (t === 'estado') {
+    if (!finFval('pfTarjeta')) { showToast('Elige tarjeta'); return; }
+    let pdfUrl = finFval('pfPdfUrl').trim();
+    const fileEl = finF('pfPdfFile');
+    if (fileEl && fileEl.files && fileEl.files[0]) {
+      btn.disabled = true; btn.textContent = 'Subiendo PDF…';
+      const up = await finUploadPdf(fileEl.files[0], finFval('pfMes'));
+      if (up && up.ok) pdfUrl = up.url; else { btn.disabled = false; btn.textContent = 'Guardar'; showToast('⚠ No se pudo subir el PDF'); return; }
+    }
+    item = {
+      ...base, tarjeta: finFval('pfTarjeta'), mes: finFval('pfMes') || finMesKey(),
+      total: parseFloat(finFval('pfTotal')) || 0, minimo: parseFloat(finFval('pfMinimo')) || 0, noIntereses: parseFloat(finFval('pfNoIntereses')) || 0,
+      fechaCorte: finFval('pfFechaCorte'), fechaLimite: finFval('pfFechaLimite'), estado: finFval('pfEstado') || 'pendiente',
+      pdfUrl, transcript: finFval('pfTranscript'), movimientos: finMovsFromRows('pfMovRows'), nota: finFval('pfNota').trim(),
+      pagado: (prevItem && prevItem.pagado) || false, fechaPago: (prevItem && prevItem.fechaPago) || ''
+    };
   } else return;
   btn.disabled = true; btn.textContent = 'Guardando…';
   const ok = await finSaveItem(item);
   btn.disabled = false; btn.textContent = 'Guardar';
-  if (ok) { cerrarModal('modalFinItem'); showToast('✓ Guardado'); }
+  if (ok) {
+    cerrarModal('modalFinItem');
+    if (t === 'msi' && finPendingMsiRow) {
+      const row = finPendingMsiRow; finPendingMsiRow = null;
+      if (finPendingMsiCuotasHistoricas && finPendingMsiCuotasHistoricas.length) {
+        const cuotasReales = finMSICuotas(item).slice(0, finPendingMsiCuotasHistoricas.length);
+        const lastRowIndex = await finCrearGastosHistoricosMSI(item, cuotasReales, finPendingMsiCardId);
+        if (lastRowIndex && row.isConnected) {
+          row.querySelector('.mov-gasto').value = String(lastRowIndex);
+          row.querySelector('.mov-estado').value = 'identificado';
+          row.replaceWith(finRowFromEl(finMovRowHTMLObjFromRow(row)));
+          finRefrescarConciliacionStats();
+        }
+        showToast('✓ ' + finPendingMsiCuotasHistoricas.length + ' cuota(s) ya cobradas registradas como gastos');
+      } else if (row.isConnected) {
+        row.querySelector('.mov-msi').value = item.id;
+        row.querySelector('.mov-estado').value = 'ignorado';
+        row.replaceWith(finRowFromEl(finMovRowHTMLObjFromRow(row)));
+        finRefrescarConciliacionStats();
+        showToast('✓ Guardado y vinculado');
+      } else {
+        showToast('✓ Guardado');
+      }
+      finPendingMsiCuotasHistoricas = null; finPendingMsiCardId = null;
+    } else {
+      showToast('✓ Guardado');
+    }
+  }
+}
+
+// ============================================================================
+// FINANZAS — Estados de cuenta, OCR y conciliación contra Gastos.
+// Transplante real de pRenderEstadosTarjeta/pMatchMovimiento/pOpenConciliacion
+// de Compras_v46.html, sobre uploadEstadoPdf/leerEstadoCuenta (ya en
+// Gastos.js). Una sola moneda (sin el tipo de cambio de viaje del original).
+// ============================================================================
+let finPendingMovRow = null;        // fila .mov-grid que se vincula tras guardar un Gasto nuevo
+let finPendingFijoId = null;        // pago fijo que se marca pagado tras guardar un Gasto nuevo
+let finPendingMsiRow = null;        // fila .mov-grid que se vincula tras crear una MSI
+let finPendingMsiCuotasHistoricas = null;
+let finPendingMsiCardId = null;
+let finPendingMsiPagadas = null;
+let finConciliacionActual = null;   // {id, tarjeta, mes} del estado abierto en el modal de conciliación
+
+// Cancelar +Gasto no debe dejar un vínculo pendiente colgado para el SIGUIENTE
+// gasto que se guarde (ej. abrir desde "🔗 Vincular" y cerrar sin guardar) —
+// solo se limpia si el cierre de verdad se confirma.
+function finCancelarModalGasto() {
+  if (!confirm('¿Cerrar sin guardar los cambios?')) return;
+  finPendingMovRow = null; finPendingFijoId = null;
+  cerrarModal('modalGasto');
+}
+
+function finNormTxt(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+// ---- forma de pago de un gasto: "TIPO§banco ····term" (+ "§MSInn") ----
+function finPagoStrTarjeta(c) {
+  const tf = c.termFisica || '', tv = c.termVirtual || '';
+  const label = ((c.banco || '') + (tf ? (' ····' + tf) : '') + (tv ? (' /····' + tv) : '')).trim();
+  return (c.ctipo || 'TDC') + '§' + label;
+}
+function finPagoParse(str) {
+  if (!str) return null;
+  const p = String(str).split('§');
+  let msi = 0; if (p[2] && /^MSI/.test(p[2])) msi = parseInt(p[2].replace('MSI', '')) || 0;
+  return { tipo: p[0] || '', tarjeta: p[1] || '', msi };
+}
+function finPagoEsTarjeta(pagoStr, c) {
+  const pg = finPagoParse(pagoStr); if (!pg || !pg.tarjeta) return false;
+  const t = pg.tarjeta.toLowerCase();
+  const banco = (c.banco || '').toLowerCase();
+  const tf = c.termFisica || '', tv = c.termVirtual || '';
+  if (tf && t.includes(tf)) return true;
+  if (tv && t.includes(tv)) return true;
+  if (banco && t.includes(banco)) {
+    const mismoBanco = finItemsOf('tarjeta').filter(x => (x.banco || '').toLowerCase() === banco);
+    if (mismoBanco.length <= 1) return true;
+    const primera = mismoBanco.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)))[0];
+    if (primera && primera.id === c.id) return true;
+  }
+  return false;
+}
+
+// ---- Forma de pago en el modal de Gasto (+Gasto) ----
+function finOnMetodoChangeGasto() {
+  const esTarj = document.getElementById('gMetodo').value === 'Tarjeta';
+  document.getElementById('gTarjetaWrap').style.display = esTarj ? 'block' : 'none';
+  if (esTarj) {
+    document.getElementById('gTarjetaSel').innerHTML = finCardOptions('');
+    document.getElementById('gTarjetaHint').style.display = finItemsOf('tarjeta').length ? 'none' : 'block';
+  }
+  finOnTarjetaSelChangeGasto();
+}
+function finOnTarjetaSelChangeGasto() {
+  const card = finCardById(document.getElementById('gTarjetaSel').value);
+  const esTDC = card && card.ctipo === 'TDC';
+  document.getElementById('gMsiWrap').style.display = esTDC ? 'block' : 'none';
+  if (!esTDC) { document.getElementById('gMsi').checked = false; document.getElementById('gMsiMeses').style.display = 'none'; }
+}
+function finOnMsiChangeGasto() { document.getElementById('gMsiMeses').style.display = document.getElementById('gMsi').checked ? 'block' : 'none'; }
+function finPagoBuildGasto() {
+  const m = document.getElementById('gMetodo').value; if (!m) return '';
+  if (m === 'Efectivo') return 'Efectivo';
+  const card = finCardById(document.getElementById('gTarjetaSel').value);
+  if (!card) return 'Tarjeta';
+  let out = finPagoStrTarjeta(card);
+  if (card.ctipo === 'TDC' && document.getElementById('gMsi').checked) out += '§MSI' + (parseInt(document.getElementById('gMsiMeses').value) || '');
+  return out;
+}
+// Después de guardar un Gasto: resuelve vínculos pendientes (conciliación / pago fijo / MSI automática)
+async function finTrasGuardarGasto(res) {
+  if (!res || !res.rowIndex) return;
+  if (finPendingMovRow) {
+    const row = finPendingMovRow; finPendingMovRow = null;
+    if (row.isConnected) {
+      row.querySelector('.mov-gasto').value = String(res.rowIndex);
+      row.querySelector('.mov-estado').value = 'identificado';
+      row.replaceWith(finRowFromEl(finMovRowHTMLObjFromRow(row)));
+      finRefrescarConciliacionStats();
+    }
+  }
+  if (finPendingFijoId) {
+    const fijoId = finPendingFijoId; finPendingFijoId = null;
+    const f = finItems.find(x => x.id === fijoId);
+    if (f) {
+      const mk = hoyISO().slice(0, 7);
+      f.pagos = f.pagos || {};
+      f.pagos[mk] = { monto: parseFloat(document.getElementById('gCosto').value) || parseFloat(f.monto) || 0, fecha: hoyISO(), gastoRowIndex: res.rowIndex };
+      await finSaveItem(f);
+      showToast('✓ Pago fijo "' + (f.concepto || '') + '" marcado como pagado');
+    }
+  }
+  if (document.getElementById('gMsi').checked && finPass) {
+    const meses = parseInt(document.getElementById('gMsiMeses').value) || 1;
+    await finSaveItem({
+      tipo: 'msi', concepto: document.getElementById('gConcepto').value || 'Compra a MSI',
+      monto: parseFloat(document.getElementById('gCosto').value) || 0, meses,
+      tarjeta: document.getElementById('gTarjetaSel').value || '', inicio: document.getElementById('gFecha').value || hoyISO(),
+      nota: '', pagadas: {}
+    });
+    showToast('✓ También registrada como compra a MSI · ' + meses + ' meses');
+  }
+}
+
+// ---- gastos ya tageados a una tarjeta (por el campo Pago) ----
+function finMesAnterior(mk) {
+  const y = parseInt(mk.slice(0, 4)), m = parseInt(mk.slice(5, 7)) - 1;
+  const d = new Date(y, m - 1, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function finCicloTarjeta(c, mk) {
+  mk = mk || finMesKey();
+  const y = parseInt(mk.slice(0, 4)), m = parseInt(mk.slice(5, 7)) - 1;
+  const edoMes = finEstadoDeTarjetaMes(c.id, mk);
+  const edoPrev = finEstadoDeTarjetaMes(c.id, finMesAnterior(mk));
+  let fin, ini;
+  if (edoMes && edoMes.fechaCorte) { fin = new Date(edoMes.fechaCorte + 'T12:00:00'); }
+  else { const corte = Math.max(1, Math.min(31, parseInt(c.diaCorte) || new Date(y, m + 1, 0).getDate())); fin = new Date(y, m, Math.min(corte, new Date(y, m + 1, 0).getDate())); }
+  if (edoPrev && edoPrev.fechaCorte) { ini = new Date(edoPrev.fechaCorte + 'T12:00:00'); ini.setDate(ini.getDate() + 1); }
+  else { ini = new Date(fin); ini.setMonth(ini.getMonth() - 1); ini.setDate(ini.getDate() + 1); }
+  return { ini: ini.toISOString().slice(0, 10), fin: fin.toISOString().slice(0, 10), label: finFmtDate(ini.toISOString().slice(0, 10)) + ' al ' + finFmtDate(fin.toISOString().slice(0, 10)) };
+}
+function finGastosDeTarjeta(c) { return (DATA.gastos || []).filter(g => g.tipoFila !== 'producto' && g.pago && finPagoEsTarjeta(g.pago, c)); }
+function finGastosDeTarjetaCiclo(c, mk) {
+  const cy = finCicloTarjeta(c, mk);
+  return finGastosDeTarjeta(c).filter(g => { const f = String(g.fecha || '').slice(0, 10); return f >= cy.ini && f <= cy.fin; });
+}
+function finGastosDeTarjetaMes(c, mk) { return finGastosDeTarjetaCiclo(c, mk); }
+function finGastosCandidatosParaMatch(c, mk) {
+  const cy = finCicloTarjeta(c, mk);
+  const d1 = new Date(cy.ini + 'T12:00:00'); d1.setDate(d1.getDate() - 10);
+  const d2 = new Date(cy.fin + 'T12:00:00'); d2.setDate(d2.getDate() + 10);
+  const rangoIni = d1.toISOString().slice(0, 10), rangoFin = d2.toISOString().slice(0, 10);
+  const enRango = g => { const f = String(g.fecha || '').slice(0, 10); return f >= rangoIni && f <= rangoFin; };
+  const tagged = finGastosDeTarjeta(c).filter(enRango);
+  const sinPago = (DATA.gastos || []).filter(g => g.tipoFila !== 'producto' && !g.pago && enRango(g));
+  const vistos = new Set(tagged.map(g => String(g.rowIndex)));
+  return tagged.concat(sinPago.filter(g => !vistos.has(String(g.rowIndex))));
+}
+function finTarjetaEstimadoCiclo(c, mk) { return finGastosDeTarjetaCiclo(c, mk).reduce((s, g) => s + (parseFloat(g.costo) || 0), 0) + finTarjetaCargado(c.id, mk); }
+function finTarjetaSaldoRef(c, mk) {
+  const estados = finItemsOf('estado').filter(e => e.tarjeta === c.id).sort((a, b) => (b.mes || '').localeCompare(a.mes || ''));
+  if (estados.length) return parseFloat(estados[0].total) || 0;
+  return finTarjetaEstimadoCiclo(c, mk);
+}
+
+// ---- estados de cuenta por tarjeta/mes ----
+function finMesVigenteTarjeta(c) {
+  const dia = parseInt(c.diaLimite) || parseInt(c.diaCorte) || 0;
+  if (!dia) return finMesKey();
+  const hoy = new Date();
+  let obj = new Date(hoy.getFullYear(), hoy.getMonth(), dia);
+  if (obj > hoy) obj = new Date(hoy.getFullYear(), hoy.getMonth() - 1, dia);
+  return obj.getFullYear() + '-' + String(obj.getMonth() + 1).padStart(2, '0');
+}
+function finEstadoDeTarjetaMes(cardId, mk) { return finItemsOf('estado').find(e => e.tarjeta === cardId && (e.mes || '') === mk); }
+function finEstadoActualDeTarjeta(c) { return finEstadoDeTarjetaMes(c.id, finMesVigenteTarjeta(c)) || null; }
+const FIN_MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+function finMesLabelCorto(mk) {
+  const parts = String(mk || '').split('-'); if (parts.length < 2) return mk || '—';
+  return parts[0] + '-' + (FIN_MESES_CORTOS[parseInt(parts[1], 10) - 1] || parts[1]);
+}
+function finEstadoLabel(s) { return ({ pendiente: 'Pendiente de revisar', parcial: 'Parcialmente conciliado', conciliado: 'Conciliado', diferencia: 'Con diferencia', identificado: 'Identificado', posible: 'Posible coincidencia', no_identificado: 'No identificado', ignorado: 'Ignorado' })[s] || s || 'Pendiente'; }
+function finEstadoColor(st) { return st === 'conciliado' ? 'var(--green)' : (st === 'diferencia' ? 'var(--red)' : (st === 'parcial' ? 'var(--orange)' : 'var(--ink3)')); }
+async function finToggleEstadoPagado(id) {
+  const e = finItems.find(x => x.id === id); if (!e) return;
+  if (e.pagado) {
+    pedirConfirmacion('Deshacer pago', '¿Deshacer el pago registrado el ' + (e.fechaPago || '') + '? Los gastos ya registrados no se borran.', async () => {
+      e.pagado = false; e.fechaPago = ''; e.montoPagado = ''; e.tipoPagoRealizado = ''; await finSaveItem(e);
+    });
+    return;
+  }
+  const hoy = hoyISO();
+  const fecha = prompt('Fecha de pago de este estado de cuenta:', hoy); if (fecha === null) return;
+  const txt = prompt('¿Cuánto pagaste? (pago para no generar intereses, o cualquier otra cantidad)', e.noIntereses || e.total || ''); if (txt === null) return;
+  const monto = parseFloat(txt) || 0; if (!monto) return;
+  let tipo = 'No intereses';
+  if (!(e.noIntereses && Math.abs(monto - (parseFloat(e.noIntereses) || 0)) <= 1)) tipo = prompt('¿Qué tipo de pago fue? (ej. "No intereses", "Pago mínimo", "Otro")', 'Otro') || '';
+  e.pagado = true; e.fechaPago = (fecha || hoy).trim(); e.montoPagado = monto; e.tipoPagoRealizado = tipo;
+  await finSaveItem(e);
+}
+function finConciliacionEstado(e) {
+  const c = finCardById(e.tarjeta) || {};
+  const gs = finGastosDeTarjetaMes(c, e.mes || finMesKey());
+  const movs = e.movimientos || [];
+  const gastoIdsVinculados = new Set(movs.filter(m => m.gastoId).map(m => String(m.gastoId)));
+  const gsSinDuplicar = gs.filter(g => !gastoIdsVinculados.has(String(g.rowIndex)));
+  const totalVinculados = movs.filter(m => m.estado === 'identificado' && m.gastoId).reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
+  const totalApp = gsSinDuplicar.reduce((s, g) => s + (parseFloat(g.costo) || 0), 0) + totalVinculados;
+  const totalReal = parseFloat(e.total) || 0;
+  const noIntereses = parseFloat(e.noIntereses) || 0;
+  const dif = Math.round((noIntereses || totalReal) - totalApp);
+  const counts = { identificado: 0, posible: 0, no_identificado: 0, ignorado: 0, pendiente: 0 };
+  movs.forEach(m => { const st = m.estado || 'pendiente'; counts[counts[st] !== undefined ? st : 'pendiente']++; });
+  let estado = e.estado || 'pendiente';
+  if (Math.abs(dif) <= 1 && counts.no_identificado === 0 && counts.pendiente === 0) estado = 'conciliado';
+  else if (counts.identificado > 0 || counts.posible > 0) estado = 'parcial';
+  if (Math.abs(dif) > 1) estado = 'diferencia';
+  return { card: c, gastos: gs, totalApp, totalReal, noIntereses, dif, movs, counts, estado };
+}
+function finRenderEstadosTarjeta(c) {
+  const estados = finItemsOf('estado').filter(e => e.tarjeta === c.id).sort((a, b) => (b.mes || '').localeCompare(a.mes || ''));
+  const addBtn = '<button class="fin-mini-btn" onclick="event.stopPropagation();finOpenEstado(\'' + escapeHtml(c.id) + '\',\'\')">＋ Estado</button>';
+  if (!estados.length) return '<div class="estado-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="color:var(--ink2)">Sin estados de cuenta ligados a esta tarjeta.</span>' + addBtn + '</div>';
+  const mkVigente = finMesVigenteTarjeta(c);
+  const vigente = finEstadoDeTarjetaMes(c.id, mkVigente);
+  const resumenCorto = vigente
+    ? (' · 🧾 ' + escapeHtml(finMesLabelCorto(vigente.mes)) + ' ' + (vigente.pagado ? '✅ pagado' : '☐ pendiente') + (vigente.fechaLimite ? (' · vence ' + finFmtDate(vigente.fechaLimite)) : ''))
+    : (' · 🧾 ' + escapeHtml(finMesLabelCorto(mkVigente)) + ' ⚠️ sin estado capturado');
+  const rows = estados.map(e => {
+    const co = finConciliacionEstado(e);
+    const pagadoChip = e.pagado
+      ? '<button class="fin-mini-btn" style="color:var(--green)" onclick="event.stopPropagation();finToggleEstadoPagado(\'' + escapeHtml(e.id) + '\')">✅ Pagado' + (e.fechaPago ? (' ' + finFmtDate(e.fechaPago)) : '') + (e.montoPagado ? (' · ' + money(e.montoPagado, c.moneda)) : '') + '</button>'
+      : '<button class="fin-mini-btn" onclick="event.stopPropagation();finToggleEstadoPagado(\'' + escapeHtml(e.id) + '\')">☐ Marcar pagado</button>';
+    const conciliado = co.estado === 'conciliado' || e.conciliadoManual;
+    return '<div class="estado-card">' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px">' +
+      '<strong class="chip" style="cursor:pointer" onclick="event.stopPropagation();finOpenEstado(\'' + escapeHtml(c.id) + '\',\'' + escapeHtml(e.id) + '\')">🧾 ' + escapeHtml(finMesLabelCorto(e.mes)) + '</strong>' +
+      pagadoChip +
+      '<span style="color:' + finEstadoColor(co.estado) + ';font-weight:600">' + finEstadoLabel(co.estado) + '</span>' +
+      '<span>app ' + money(co.totalApp, c.moneda) + '</span>' +
+      '<span style="color:' + (co.dif ? 'var(--red)' : 'var(--green)') + '">dif ' + money(Math.abs(co.dif), c.moneda) + '</span>' +
+      '<button class="fin-mini-btn" style="' + (conciliado ? 'color:var(--green)' : '') + '" onclick="event.stopPropagation();finMarcarConciliadoFlow(\'' + escapeHtml(e.id) + '\')">' + (conciliado ? '✓ conciliado' : '✗ no conciliado') + '</button>' +
+      (e.pdfUrl ? ('<a class="fin-mini-btn" style="text-decoration:none" href="' + escapeHtml(e.pdfUrl) + '" target="_blank" onclick="event.stopPropagation()">📄 PDF</a>') : '<span class="chip" style="color:var(--red)">📄 Falta PDF</span>') +
+      '<button class="fin-mini-btn" onclick="event.stopPropagation();finOpenConciliacion(\'' + escapeHtml(e.id) + '\')">🔎 Conciliar</button>' +
+      '<button class="fin-mini-btn" onclick="event.stopPropagation();finOpenEstado(\'' + escapeHtml(c.id) + '\',\'' + escapeHtml(e.id) + '\')">✏️</button>' +
+      '<button class="fin-mini-btn danger" onclick="event.stopPropagation();finDelItem(\'' + escapeHtml(e.id) + '\')">🗑</button>' +
+      '</div></div>';
+  }).join('');
+  return '<details class="fin-details" style="margin-top:8px" onclick="event.stopPropagation()"><summary>Estados de cuenta' + resumenCorto + '</summary>' + addBtn + rows + '</details>';
+}
+function finOpenEstado(cardId, id) {
+  finOpenForm('estado', id || '').then(() => { const s = finF('pfTarjeta'); if (s && cardId) s.value = cardId; });
+}
+
+// ---- subir PDF / leer con IA ----
+function finUploadPdf(file, mes) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = async ev => {
+      try {
+        const b64 = String(ev.target.result || '').split(',')[1] || '';
+        resolve(await apiCall('uploadEstadoPdf', { filename: file.name, mimeType: file.type || 'application/pdf', base64: b64, mes: mes || finMesKey(), owner: finOwner, pass: finPass }));
+      } catch (e) { reject(e); }
+    };
+    r.onerror = () => reject(new Error('No se pudo leer el PDF'));
+    r.readAsDataURL(file);
+  });
+}
+function finReadFileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = ev => resolve(String(ev.target.result || '').split(',')[1] || '');
+    r.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    r.readAsDataURL(file);
+  });
+}
+function finMostrarSubirPdf() { const w = finF('pfPdfSubirWrap'); if (w) w.style.display = ''; const t = finF('pfPdfTieneUno'); if (t) t.style.display = 'none'; }
+async function finLeerEstadoIA() {
+  const btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+  const original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Leyendo…'; }
+  try {
+    const file = (finF('pfPdfFile') && finF('pfPdfFile').files && finF('pfPdfFile').files[0]) || null;
+    const transcript = finFval('pfTranscript');
+    const base64 = file ? await finReadFileBase64(file) : '';
+    const pdfUrl = (!file && !transcript) ? finFval('pfPdfUrl') : '';
+    const r = await apiCall('leerEstadoCuenta', { owner: finOwner, pass: finPass, base64, mimeType: file ? (file.type || 'application/pdf') : '', transcript, pdfUrl });
+    if (!(r && r.ok)) throw new Error((r && r.error) || 'No se pudo leer');
+    const x = r.result || {};
+    if (x.total != null) finF('pfTotal').value = x.total;
+    if (x.minimo != null) finF('pfMinimo').value = x.minimo;
+    if (x.noIntereses != null) finF('pfNoIntereses').value = x.noIntereses;
+    if (x.fechaCorte) finF('pfFechaCorte').value = String(x.fechaCorte).slice(0, 10);
+    if (x.fechaLimite) finF('pfFechaLimite').value = String(x.fechaLimite).slice(0, 10);
+    const movs = (Array.isArray(x.movimientos) ? x.movimientos : []).map(m => ({ fecha: String(m.fecha || '').slice(0, 10), descripcion: m.descripcion || '', monto: parseFloat(m.monto) || 0, categoria: m.categoria || '❓ Otro / por revisar', estado: 'pendiente' }));
+    if (movs.length) { finF('pfMovRows').innerHTML = movs.map(finMovRowHTML).join(''); finAutoMatchFormMovs(true, 'pfMovRows'); }
+    showToast('✨ IA leyó ' + movs.length + ' movimientos' + (r.ia ? (' · ' + r.ia) : ''));
+  } catch (e) { showToast('⚠ IA estado: ' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = original || '🤖 Leer con IA'; } }
+}
+
+// ---- editor de movimientos (reutilizado en el form de estado y en Conciliación) ----
+function finMovEstadoIcon(s) { return ({ pendiente: '⏳ Pendiente', identificado: '✅ Identificado', posible: '🤔 Posible', no_identificado: '❌ No identif.', ignorado: '🚫 Ignorado' })[s] || ('⏳ ' + (s || 'Pendiente')); }
+function finMovRowHTML(m) {
+  m = m || { estado: 'pendiente' };
+  const opts = ['pendiente', 'identificado', 'posible', 'no_identificado', 'ignorado'].map(s => '<option value="' + s + '"' + ((m.estado || 'pendiente') === s ? ' selected' : '') + '>' + finMovEstadoIcon(s) + '</option>').join('');
+  const link = m.gastoId
+    ? '<button type="button" class="fin-mini-btn" title="Ver gasto vinculado" onclick="finOpenLinkedGasto(\'' + escapeHtml(m.gastoId) + '\')">↗ Gasto</button><button type="button" class="fin-mini-btn" title="Desvincular" onclick="finDesvincularMovRow(this)">↩️</button>'
+    : m.msiId
+      ? '<button type="button" class="fin-mini-btn" title="Ver MSI vinculada" onclick="finOpenForm(\'msi\',\'' + escapeHtml(m.msiId) + '\')">↗ MSI</button><button type="button" class="fin-mini-btn" title="Desvincular" onclick="finDesvincularMovRow(this)">↩️</button>'
+      : '<button type="button" class="fin-mini-btn" title="Vincular con gasto existente" onclick="finVincularMovRow(this)">🔗</button><button type="button" class="fin-mini-btn" title="Registrar como nuevo gasto" onclick="finRegistrarMovComoGasto(this)">➕</button><button type="button" class="fin-mini-btn" title="Es una compra a MSI" onclick="finMovComoMSI(this)">🗓️</button><button type="button" class="fin-mini-btn" title="Es uno de tus pagos fijos" onclick="finMovComoFijo(this)">🔁</button>';
+  return '<div class="mov-grid"><input class="mov-desc" value="' + escapeHtml(m.descripcion || '') + '" placeholder="Comercio / descripción"><div style="display:flex;gap:4px"><input type="date" class="mov-fecha" value="' + escapeHtml(m.fecha || '') + '" style="flex:1"><input type="number" class="mov-monto" value="' + escapeHtml(m.monto || '') + '" placeholder="0" style="flex:1"></div><input class="mov-cat" value="' + escapeHtml(m.categoria || '') + '" placeholder="Categoría"><select class="mov-estado">' + opts + '</select><div class="mov-acc"><input type="hidden" class="mov-gasto" value="' + escapeHtml(m.gastoId || '') + '"><input type="hidden" class="mov-msi" value="' + escapeHtml(m.msiId || '') + '">' + link + '<button type="button" class="fin-mini-btn danger" onclick="this.closest(\'.mov-grid\').remove()">🗑</button></div></div>';
+}
+function finMovRowsHTML(movs, containerId) {
+  containerId = containerId || 'pfMovRows';
+  const arr = (movs && movs.length) ? movs : [{ estado: 'pendiente' }];
+  return '<div class="pf-field"><label>Movimientos del estado</label><div id="' + containerId + '">' + arr.map(finMovRowHTML).join('') + '</div><div class="fin-row-actions"><button type="button" class="fin-mini-btn" onclick="finAddEstadoMov(\'' + containerId + '\')">＋ Movimiento</button><button type="button" class="fin-mini-btn" onclick="finAutoMatchFormMovs(false,\'' + containerId + '\')">🔎 Auto-identificar</button></div></div>';
+}
+function finAddEstadoMov(containerId) { const host = finF(containerId || 'pfMovRows'); if (host) host.insertAdjacentHTML('beforeend', finMovRowHTML({ estado: 'pendiente' })); }
+function finMovRowHTMLObjFromRow(row) {
+  return {
+    fecha: (row.querySelector('.mov-fecha') || {}).value || '',
+    descripcion: (row.querySelector('.mov-desc') || {}).value || '',
+    monto: parseFloat((row.querySelector('.mov-monto') || {}).value) || 0,
+    categoria: (row.querySelector('.mov-cat') || {}).value || '',
+    estado: (row.querySelector('.mov-estado') || {}).value || 'pendiente',
+    gastoId: (row.querySelector('.mov-gasto') || {}).value || '',
+    msiId: (row.querySelector('.mov-msi') || {}).value || ''
+  };
+}
+function finMovsFromRows(containerId) {
+  return [...document.querySelectorAll('#' + (containerId || 'pfMovRows') + ' .mov-grid')].map(finMovRowHTMLObjFromRow).filter(m => m.fecha || m.descripcion || m.monto);
+}
+function finRowFromEl(m) { const div = document.createElement('div'); div.innerHTML = finMovRowHTML(m); return div.firstElementChild; }
+function finDateDistance(a, b) { if (!a || !b) return 9999; return Math.abs((new Date(a + 'T12:00:00') - new Date(b + 'T12:00:00')) / 864e5); }
+function finMatchMovimiento(m, cardId, mes) {
+  const c = finCardById(cardId) || {};
+  const gastos = finGastosCandidatosParaMatch(c, mes || finMesKey());
+  const monto = parseFloat(m.monto) || 0;
+  const desc = finNormTxt(m.descripcion || '');
+  const tolMonto = Math.max(100, monto * 0.03);
+  let best = null, score = -1;
+  gastos.forEach(g => {
+    const diff = Math.abs((parseFloat(g.costo) || 0) - monto);
+    if (diff > tolMonto) return;
+    const dd = finDateDistance(String(m.fecha || '').slice(0, 10), String(g.fecha || '').slice(0, 10));
+    if (dd > 7) return;
+    const txt = finNormTxt((g.concepto || '') + ' ' + (g.tienda || '') + ' ' + (g.notas || ''));
+    const hits = desc.split(/\s+/).filter(w => w.length > 3 && txt.includes(w)).length;
+    const tf = c.termFisica || '';
+    const sc = Math.max(0, 20 - (diff / tolMonto) * 20) + Math.max(0, 10 - dd) + hits * 10 + ((tf && g.pago && g.pago.includes(tf)) ? 15 : 0);
+    if (sc > score) { score = sc; best = g; }
+  });
+  return best ? { gasto: best, exact: score >= 25 } : null;
+}
+function finAutoMatchFormMovs(silent, containerId) {
+  containerId = containerId || 'pfMovRows';
+  const enConciliacion = (containerId === 'pcMovRows' && finConciliacionActual);
+  const cardId = enConciliacion ? finConciliacionActual.tarjeta : (finFval('pfTarjeta') || (finConciliacionActual && finConciliacionActual.tarjeta) || '');
+  const mes = enConciliacion ? finConciliacionActual.mes : (finFval('pfMes') || (finConciliacionActual && finConciliacionActual.mes) || finMesKey());
+  const movs = finMovsFromRows(containerId);
+  let id = 0, pos = 0;
+  movs.forEach(m => {
+    if (m.estado === 'identificado' || m.estado === 'ignorado') return;
+    const match = finMatchMovimiento(m, cardId, mes);
+    if (match) { m.gastoId = String(match.gasto.rowIndex || ''); m.estado = match.exact ? 'identificado' : 'posible'; if (match.exact) id++; else pos++; }
+    else if (m.estado === 'pendiente') m.estado = 'no_identificado';
+  });
+  const host = finF(containerId); if (host) host.innerHTML = movs.map(finMovRowHTML).join('');
+  finRefrescarConciliacionStats();
+  if (!silent) showToast('🔎 ' + id + ' identificados · ' + pos + ' posibles');
+}
+function finOpenLinkedGasto(ref) {
+  const g = (DATA.gastos || []).find(x => x.rowIndex === parseInt(ref));
+  if (!g) { showToast('No encontré ese gasto'); return; }
+  alert('🧾 ' + (g.concepto || '') + '\n' + (g.tienda || '') + ' · ' + money(g.costo, g.moneda) + '\n' + (g.fecha || ''));
+}
+function finCandidatosVincular(m, cardId, mes) {
+  const c = finCardById(cardId) || {};
+  const porTarjeta = cardId ? finGastosDeTarjetaMes(c, mes) : [];
+  const fechaMov = String(m.fecha || '').slice(0, 10);
+  const otros = (DATA.gastos || []).filter(g => {
+    if (g.tipoFila === 'producto') return false;
+    if (!fechaMov) return true;
+    return Math.abs(new Date(String(g.fecha || '').slice(0, 10) + 'T12:00:00') - new Date(fechaMov + 'T12:00:00')) / 86400000 <= 45;
+  });
+  const vistos = {}; const out = [];
+  porTarjeta.concat(otros).forEach(g => { if (g.rowIndex && !vistos[g.rowIndex]) { vistos[g.rowIndex] = true; out.push(g); } });
+  return out.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+}
+
+// ---- modal genérico "vincular" (gasto existente / pago fijo) ----
+let finVincularCtx = null;
+function finAbrirVincular(titulo, msg, candidatos, renderLabel, onConfirm, preseleccion) {
+  finVincularCtx = { candidatos, renderLabel, onConfirm, selected: preseleccion || null };
+  finF('vincularTitulo').textContent = titulo;
+  finF('vincularMsg').textContent = msg;
+  finF('vincularBuscar').value = '';
+  finRenderVincularOpts();
+  abrirModal('modalVincular');
+}
+function finRenderVincularOpts(filtro) {
+  if (!finVincularCtx) return;
+  const q = finNormTxt(filtro || '');
+  finF('vincularOpts').innerHTML = finVincularCtx.candidatos.map(c => {
+    const r = finVincularCtx.renderLabel(c);
+    if (q && !finNormTxt(r.texto).includes(q)) return '';
+    return '<button type="button" class="vincular-opt' + (finVincularCtx.selected === r.id ? ' sel' : '') + '" data-id="' + escapeHtml(String(r.id)) + '" onclick="finVincularElegir(this)">' + r.texto + '</button>';
+  }).join('') || '<div class="empty-state">Sin opciones</div>';
+}
+function finFiltrarVincularOpts() { finRenderVincularOpts(finF('vincularBuscar').value); }
+function finVincularElegir(btn) {
+  document.querySelectorAll('#vincularOpts .vincular-opt').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  if (finVincularCtx) finVincularCtx.selected = btn.dataset.id;
+}
+function finVincularConfirmar() {
+  if (!finVincularCtx || finVincularCtx.selected == null) { showToast('Elige una opción de la lista'); return; }
+  const sel = finVincularCtx.selected, cb = finVincularCtx.onConfirm;
+  cerrarModal('modalVincular'); finVincularCtx = null;
+  cb(sel);
+}
+
+// ---- acciones por fila del estado de cuenta ----
+async function finActualizarPagoDeGastoVinculado(rowIndex) {
+  const cardId = finConciliacionActual && finConciliacionActual.tarjeta; if (!cardId) return;
+  const c = finCardById(cardId); if (!c) return;
+  const nuevoPago = finPagoStrTarjeta(c);
+  const g = (DATA.gastos || []).find(x => String(x.rowIndex) === String(rowIndex));
+  if (g && g.pago !== nuevoPago) { try { await apiCall('updateGasto', { rowIndex, pago: nuevoPago }); g.pago = nuevoPago; } catch (e) {} }
+}
+function finVincularMovRow(btn) {
+  const row = btn.closest('.mov-grid');
+  const cardId = finFval('pfTarjeta') || (finConciliacionActual && finConciliacionActual.tarjeta) || '';
+  const mes = finFval('pfMes') || (finConciliacionActual && finConciliacionActual.mes) || finMesKey();
+  const m = { fecha: (row.querySelector('.mov-fecha') || {}).value || '', descripcion: (row.querySelector('.mov-desc') || {}).value || '', monto: parseFloat((row.querySelector('.mov-monto') || {}).value) || 0 };
+  const match = finMatchMovimiento(m, cardId, mes);
+  const candidatos = finCandidatosVincular(m, cardId, mes);
+  const msg = match ? ('Sugerido: ' + (match.gasto.concepto || match.gasto.tienda || 'gasto') + ' · ' + money(match.gasto.costo, match.gasto.moneda) + ' — confirma o elige otro.') : (candidatos.length ? 'No se identifica automáticamente. Busca entre tus gastos:' : 'Sin gastos cerca de esa fecha. Usa "➕ Registrar como nuevo gasto".');
+  finAbrirVincular('Vincular movimiento', msg, candidatos,
+    g => ({ id: String(g.rowIndex), texto: escapeHtml(String(g.fecha || '').slice(0, 10)) + ' · ' + escapeHtml(g.concepto || g.tienda || 'gasto') + ' · ' + money(g.costo, g.moneda) }),
+    (rowIndex) => {
+      row.querySelector('.mov-gasto').value = rowIndex;
+      row.querySelector('.mov-estado').value = 'identificado';
+      row.replaceWith(finRowFromEl(finMovRowHTMLObjFromRow(row)));
+      finActualizarPagoDeGastoVinculado(rowIndex);
+      finRefrescarConciliacionStats();
+      showToast('🔗 Vinculado');
+    },
+    match ? String(match.gasto.rowIndex) : null);
+}
+function finDesvincularMovRow(btn) {
+  const row = btn.closest('.mov-grid');
+  const m = finMovRowHTMLObjFromRow(row);
+  m.gastoId = ''; m.msiId = ''; m.estado = 'pendiente';
+  row.replaceWith(finRowFromEl(m));
+  finRefrescarConciliacionStats();
+  showToast('Desvinculado');
+}
+function finRegistrarMovComoGasto(btn) {
+  const row = btn.closest('.mov-grid');
+  const m = finMovRowHTMLObjFromRow(row);
+  const cardId = finFval('pfTarjeta') || (finConciliacionActual && finConciliacionActual.tarjeta) || '';
+  const c = finCardById(cardId) || {};
+  abrirModalGasto();
+  document.getElementById('gFecha').value = m.fecha || hoyISO();
+  document.getElementById('gCosto').value = m.monto || '';
+  document.getElementById('gConcepto').value = m.descripcion || 'Movimiento de estado de cuenta';
+  document.getElementById('gCategoria').value = m.categoria || '❓ Otro / por revisar';
+  document.getElementById('gNotas').value = 'Desde estado de cuenta · ' + (c.banco || c.nombre || '');
+  if (cardId) { document.getElementById('gMetodo').value = 'Tarjeta'; finOnMetodoChangeGasto(); document.getElementById('gTarjetaSel').value = cardId; finOnTarjetaSelChangeGasto(); }
+  finPendingMovRow = row;
+  showToast('Revisa y guarda; esta fila se vinculará sola');
+}
+function finMovComoFijo(btn) {
+  const row = btn.closest('.mov-grid');
+  const fijos = finItemsOf('fijo');
+  if (!fijos.length) { showToast('No tienes pagos fijos registrados — créalo primero en Fijos'); return; }
+  finAbrirVincular('¿Cuál pago fijo es?', 'Escribe para buscar.', fijos,
+    f => ({ id: f.id, texto: escapeHtml(f.concepto || 'Pago fijo') + ' · ' + money(f.monto) }),
+    (fijoId) => {
+      const f = finItems.find(x => x.id === fijoId); if (!f) return;
+      const m = finMovRowHTMLObjFromRow(row);
+      const cardId = finFval('pfTarjeta') || (finConciliacionActual && finConciliacionActual.tarjeta) || '';
+      const c = finCardById(cardId) || {};
+      abrirModalGasto();
+      document.getElementById('gFecha').value = m.fecha || hoyISO();
+      document.getElementById('gCosto').value = parseFloat(m.monto) || parseFloat(f.monto) || 0;
+      document.getElementById('gConcepto').value = f.concepto || 'Pago fijo';
+      document.getElementById('gCategoria').value = f.categoria || '';
+      document.getElementById('gNotas').value = 'Desde estado de cuenta · ' + (c.banco || c.nombre || '');
+      if (cardId) { document.getElementById('gMetodo').value = 'Tarjeta'; finOnMetodoChangeGasto(); document.getElementById('gTarjetaSel').value = cardId; finOnTarjetaSelChangeGasto(); }
+      finPendingMovRow = row;
+      finPendingFijoId = fijoId;
+      showToast('Revisa y guarda; se vinculará con "' + (f.concepto || 'pago fijo') + '" y quedará marcado como pagado');
+    });
+}
+function finFechaPrimerPagoDesde(cardId, fechaConocida, numCuota) {
+  const card = finCardById(cardId);
+  const corte = card ? (parseInt(card.diaCorte) || 0) : 0;
+  const fechaObj = new Date((fechaConocida || hoyISO()) + 'T12:00:00');
+  if (!corte) { const d = new Date(fechaObj); d.setMonth(d.getMonth() - (numCuota - 1)); return d.toISOString().slice(0, 10); }
+  let cobroDeEsaCuota = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), Math.min(corte, new Date(fechaObj.getFullYear(), fechaObj.getMonth() + 1, 0).getDate()));
+  if (cobroDeEsaCuota > fechaObj) cobroDeEsaCuota = new Date(fechaObj.getFullYear(), fechaObj.getMonth() - 1, corte);
+  const primeraCuota = new Date(cobroDeEsaCuota.getFullYear(), cobroDeEsaCuota.getMonth() - (numCuota - 1), corte);
+  return primeraCuota.toISOString().slice(0, 10);
+}
+function finMovComoMSI(btn) {
+  const row = btn.closest('.mov-grid');
+  const m = finMovRowHTMLObjFromRow(row);
+  const cardId = finFval('pfTarjeta') || (finConciliacionActual && finConciliacionActual.tarjeta) || '';
+  const meses = parseInt(prompt('¿A cuántos meses es esta compra a MSI? (ej. 3, 6, 12)', '12')) || 1;
+  const numCuota = Math.min(meses, parseInt(prompt('¿Qué cuota es este cobro? (1 si es la primera, 3 si ya va en la 3 de ' + meses + ')', '1')) || 1);
+  const fechaPrimeraCuota = finFechaPrimerPagoDesde(cardId, m.fecha, numCuota);
+  const cuotasProyectadas = finMSICuotas({ inicio: fechaPrimeraCuota, tarjeta: cardId, meses, pagadas: {} });
+  const pagadasPre = {}; const cuotasHistoricas = [];
+  if (numCuota >= 1) cuotasProyectadas.slice(0, numCuota).forEach(q => { pagadasPre[q.key] = true; cuotasHistoricas.push({ fecha: q.fecha, monto: q.monto, idx: q.idx }); });
+  finPendingMsiPagadas = pagadasPre;
+  finPendingMsiCuotasHistoricas = numCuota > 1 ? cuotasHistoricas : null;
+  finPendingMsiCardId = cardId;
+  finPendingMsiRow = row;
+  finOpenForm('msi', '');
+  setTimeout(() => {
+    const cuota = parseFloat(m.monto) || 0;
+    if (finF('pfConcepto')) finF('pfConcepto').value = m.descripcion || '';
+    if (finF('pfMonto')) finF('pfMonto').value = Math.round(cuota * meses);
+    if (finF('pfMeses')) finF('pfMeses').value = meses;
+    if (finF('pfInicio')) finF('pfInicio').value = fechaPrimeraCuota;
+    if (cardId && finF('pfTarjeta')) finF('pfTarjeta').value = cardId;
+  }, 0);
+  showToast(numCuota > 1 ? ('Cuota ' + numCuota + ' de ' + meses + ' — se marcarán pagadas 1 a ' + numCuota + ' y se registrarán como gastos al guardar.') : 'Revisa el TOTAL sugerido y guarda — esta fila se vincula sola.');
+}
+async function finCrearGastosHistoricosMSI(msiItem, cuotas, cardId) {
+  const c = finCardById(cardId) || {};
+  const pago = c.id ? finPagoStrTarjeta(c) : '';
+  let lastRowIndex = null;
+  for (const q of cuotas) {
+    const r = await apiCall('saveGasto', { fecha: q.fecha, costo: q.monto, moneda: c.moneda || 'MXN', concepto: (msiItem.concepto || 'Compra a MSI') + ' (cuota ' + q.idx + ')', tienda: msiItem.concepto || '', quien_paga: usuarioActual.Nombre, pago, categoria: 'MSI', notas: 'Cuota ya cobrada · MSI ' + msiItem.id });
+    if (r && r.ok) lastRowIndex = r.rowIndex;
+  }
+  cargarTodo();
+  return lastRowIndex;
+}
+
+// ---- panel de Conciliación (por estado de cuenta) ----
+function finEstadoStat_(t, v, col) { return '<div><div class="es-label">' + t + '</div><div class="es-val"' + (col ? (' style="color:' + col + '"') : '') + '>' + v + '</div></div>'; }
+function finOpenConciliacion(estadoId) {
+  const e = finItems.find(x => x.id === estadoId); if (!e) return;
+  finConciliacionActual = { id: e.id, tarjeta: e.tarjeta, mes: e.mes };
+  const co = finConciliacionEstado(e);
+  const mon = co.card && co.card.moneda;
+  finF('conciliacionBody').innerHTML =
+    '<div style="font-size:13px;font-weight:700;margin-bottom:2px">' + escapeHtml(finCardLabel(co.card)) + ' · ' + escapeHtml(e.mes || '—') + '</div>' +
+    '<p style="font-size:11px;color:var(--ink2);margin-bottom:10px">El pago completo de la tarjeta NO se registra como gasto; solo los movimientos que envíes abajo.</p>' +
+    '<div class="estado-stats" id="conciliacionStats">' +
+    finEstadoStat_('Estimado app', money(co.totalApp, mon)) + finEstadoStat_('Estado de cuenta', money(co.totalReal, mon)) +
+    finEstadoStat_('No generar intereses', money(co.noIntereses, mon)) + finEstadoStat_('Diferencia', money(Math.abs(co.dif), mon), co.dif ? 'var(--red)' : 'var(--green)') +
+    finEstadoStat_('Estado', finEstadoLabel(co.estado), finEstadoColor(co.estado)) + '</div>' +
+    finMovRowsHTML(e.movimientos || [], 'pcMovRows') +
+    '<div class="fin-row-actions" style="margin-top:10px">' +
+    '<button class="btn btn-sec btn-sm" id="pcGuardarBtn" onclick="finConciliacionGuardar()">💾 Guardar cambios</button>' +
+    '<button class="btn btn-sec btn-sm" onclick="finEnviarNoIdentificados(\'' + escapeHtml(e.id) + '\')">📤 Enviar a gastos</button>' +
+    '<button class="btn btn-sec btn-sm" onclick="finRegistrarDiferencia(\'' + escapeHtml(e.id) + '\')">➕ Registrar diferencia</button>' +
+    '<button class="btn btn-sec btn-sm" onclick="finRefrescarConciliacionStats()">🔄 Recalcular</button>' +
+    '<button class="btn btn-sec btn-sm" onclick="finMarcarConciliadoFlow(\'' + escapeHtml(e.id) + '\')">✅ Marcar conciliado</button>' +
+    '</div>';
+  abrirModal('modalConciliacion');
+}
+function finCerrarConciliacion() { cerrarModal('modalConciliacion'); finConciliacionActual = null; }
+function finRefrescarConciliacionStats() {
+  if (!finConciliacionActual) return;
+  const e = finItems.find(x => x.id === finConciliacionActual.id); if (!e) return;
+  const grid = finF('conciliacionStats'); if (!grid) return;
+  e.movimientos = finMovsFromRows('pcMovRows');
+  const co = finConciliacionEstado(e);
+  const mon = co.card && co.card.moneda;
+  grid.innerHTML = finEstadoStat_('Estimado app', money(co.totalApp, mon)) + finEstadoStat_('Estado de cuenta', money(co.totalReal, mon)) + finEstadoStat_('No generar intereses', money(co.noIntereses, mon)) + finEstadoStat_('Diferencia', money(Math.abs(co.dif), mon), co.dif ? 'var(--red)' : 'var(--green)') + finEstadoStat_('Estado', finEstadoLabel(co.estado), finEstadoColor(co.estado));
+}
+async function finConciliacionGuardar() {
+  if (!finConciliacionActual) return;
+  const e = finItems.find(x => x.id === finConciliacionActual.id); if (!e) return;
+  const btn = finF('pcGuardarBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  e.movimientos = finMovsFromRows('pcMovRows');
+  const ok = await finSaveItem(e);
+  if (ok) {
+    const actualizados = await finActualizarTarjetasVinculadas(e);
+    showToast('✓ Movimientos guardados' + (actualizados > 0 ? (' · método de pago corregido en ' + actualizados + ' gastos') : ''));
+    finOpenConciliacion(e.id);
+  } else if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar cambios'; }
+}
+async function finActualizarTarjetasVinculadas(estadoItem) {
+  const c = finCardById(estadoItem.tarjeta); if (!c) return 0;
+  const nuevoPago = finPagoStrTarjeta(c);
+  const vinculados = (estadoItem.movimientos || []).filter(m => m.estado === 'identificado' && m.gastoId);
+  let actualizados = 0;
+  for (const m of vinculados) {
+    const g = (DATA.gastos || []).find(x => String(x.rowIndex) === String(m.gastoId));
+    if (!g || g.pago === nuevoPago) continue;
+    try { await apiCall('updateGasto', { rowIndex: parseInt(m.gastoId), pago: nuevoPago }); g.pago = nuevoPago; actualizados++; } catch (e) {}
+  }
+  return actualizados;
+}
+function finRegistrarDiferencia(estadoId) {
+  const e = finItems.find(x => x.id === estadoId); if (!e) return;
+  const co = finConciliacionEstado(e);
+  const dif = Math.round((parseFloat(e.noIntereses) || 0) - co.totalApp);
+  if (!(dif > 1)) { showToast('No hay diferencia positiva para registrar'); return; }
+  abrirModalGasto();
+  document.getElementById('gFecha').value = hoyISO();
+  document.getElementById('gCosto').value = dif;
+  document.getElementById('gConcepto').value = 'Gasto no identificado / diferencia de estado de cuenta';
+  document.getElementById('gCategoria').value = '❓ Otro / por revisar';
+  document.getElementById('gNotas').value = 'Diferencia estado ' + (e.mes || '') + ' · ' + finCardLabel(co.card) + ' · estadoId ' + e.id;
+  document.getElementById('gMetodo').value = 'Tarjeta'; finOnMetodoChangeGasto();
+  document.getElementById('gTarjetaSel').value = e.tarjeta; finOnTarjetaSelChangeGasto();
+  showToast('Revisa y guarda solo la diferencia, no el pago completo');
+}
+async function finEnviarNoIdentificados(estadoId) {
+  const e = finItems.find(x => x.id === estadoId); if (!e) return false;
+  const c = finCardById(e.tarjeta) || {};
+  const movs = (e.movimientos || []).map(m => ({ ...m }));
+  const pend = movs.filter(m => (m.estado || 'pendiente') === 'no_identificado');
+  if (!pend.length) { showToast('No hay movimientos no identificados para enviar'); return false; }
+  const confirmado = await new Promise(resolve => pedirConfirmacion('Enviar a gastos', 'Se crearán ' + pend.length + ' gasto(s) reales. ¿Continuar?', () => resolve(true)));
+  if (!confirmado) return false;
+  const pago = c.id ? finPagoStrTarjeta(c) : '';
+  let creados = 0;
+  for (const m of movs) {
+    if ((m.estado || 'pendiente') !== 'no_identificado') continue;
+    const r = await apiCall('saveGasto', { fecha: m.fecha || hoyISO(), costo: parseFloat(m.monto) || 0, moneda: c.moneda || 'MXN', concepto: m.descripcion || 'Movimiento no identificado', tienda: m.descripcion || '', quien_paga: usuarioActual.Nombre, pago, categoria: m.categoria || '❓ Otro / por revisar', notas: 'Desde estado de cuenta ' + (e.mes || '') + ' · ' + finCardLabel(c) + ' · estadoId ' + e.id });
+    if (r && r.ok) { m.estado = 'identificado'; m.gastoId = String(r.rowIndex || ''); creados++; }
+  }
+  e.movimientos = movs;
+  await finSaveItem(e);
+  cargarTodo();
+  showToast('✓ ' + creados + ' gasto(s) creados');
+  if (finConciliacionActual && finConciliacionActual.id === estadoId) finOpenConciliacion(estadoId);
+  return true;
+}
+function finMarcarConciliadoDirecto(estadoId) {
+  const e = finItems.find(x => x.id === estadoId); if (!e) return;
+  e.conciliadoManual = true;
+  finSaveItem(e);
+  showToast('✓ Marcado como conciliado');
+  if (finConciliacionActual && finConciliacionActual.id === estadoId) finOpenConciliacion(estadoId);
+}
+async function finMarcarConciliadoFlow(estadoId) {
+  const e = finItems.find(x => x.id === estadoId); if (!e) return;
+  const co = finConciliacionEstado(e);
+  const op = (prompt('¿Cómo quieres dejar esto conciliado?\n\n1 = Pagar solo la diferencia (' + money(Math.abs(co.dif), co.card && co.card.moneda) + ')\n2 = Registrar los no identificados (' + co.counts.no_identificado + ') como gastos\n3 = Ya registré todo yo, solo marcar conciliado\n\nEscribe 1, 2 o 3:', '3') || '').trim();
+  if (!op) return;
+  if (op === '1') {
+    if (!(Math.abs(co.dif) > 1)) { showToast('No hay diferencia positiva — usa la opción 3'); return; }
+    finRegistrarDiferencia(estadoId);
+  } else if (op === '2') {
+    if (co.counts.no_identificado === 0) { showToast('No hay movimientos no identificados — usa la opción 3'); return; }
+    const ok = await finEnviarNoIdentificados(estadoId);
+    if (ok) finMarcarConciliadoDirecto(estadoId);
+  } else {
+    finMarcarConciliadoDirecto(estadoId);
+  }
 }
 </script>
 </body>
