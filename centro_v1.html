@@ -211,12 +211,28 @@ a{color:var(--accent)}
     <button class="fab" onclick="abrirModalComida()">+</button>
   </div>
 
-  <div class="view" id="view-acuerdos"><div class="empty-state">🤝 Acuerdos — próximamente (fase 3)</div></div>
+  <!-- ---- ACUERDOS ---- -->
+  <div class="view" id="view-acuerdos">
+    <div class="pill-group" id="filtroAcuerdosEstado" style="margin-bottom:10px">
+      <span class="pill on" data-estado="Pendiente" onclick="filtrarAcuerdos('Pendiente')">Pendientes</span>
+      <span class="pill" data-estado="Cumplido" onclick="filtrarAcuerdos('Cumplido')">Cumplidos</span>
+      <span class="pill" data-estado="" onclick="filtrarAcuerdos('')">Todos</span>
+    </div>
+    <div class="card" id="listaAcuerdos"><div class="loading">Cargando…</div></div>
+    <button class="fab" onclick="abrirModalAcuerdo()">+</button>
+  </div>
+
   <div class="view" id="view-viajes"><div class="empty-state">✈️ Itinerario — próximamente (fase 3)</div></div>
   <div class="view" id="view-notas"><div class="empty-state">📝 Notas — próximamente (fase 3)</div></div>
 
   <!-- ---- CONFIGURACIÓN ---- -->
   <div class="view" id="view-config">
+    <div class="section-title">Más módulos</div>
+    <div class="card">
+      <div class="folder-row" onclick="irAVista('acuerdos')"><span class="folder-icon">🤝</span><span class="lr-title">Acuerdos</span><span class="chevron">›</span></div>
+      <div class="folder-row" onclick="irAVista('viajes')"><span class="folder-icon">✈️</span><span class="lr-title">Itinerario</span><span class="chevron">›</span></div>
+      <div class="folder-row" onclick="irAVista('notas')"><span class="folder-icon">📝</span><span class="lr-title">Notas</span><span class="chevron">›</span></div>
+    </div>
     <div class="card">
       <div class="list-row"><div class="lr-main"><span class="lr-title">Versión</span><span class="lr-sub" id="versionTexto">—</span></div>
         <button class="btn btn-sec btn-sm" onclick="forzarActualizacion()">Forzar actualización</button></div>
@@ -374,6 +390,21 @@ a{color:var(--accent)}
   </div>
 </div>
 
+<!-- ============ MODAL: acuerdo nuevo ============ -->
+<div id="modalAcuerdo" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalAcuerdo')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nuevo acuerdo</div>
+    <div class="field"><label>Título</label><input id="acTitulo" type="text" placeholder="Lavar los trastes"></div>
+    <div class="field"><label>¿Con quién?</label><input id="acConQuien" type="text"></div>
+    <div class="field"><label>Fecha límite</label><input id="acFechaLimite" type="date"></div>
+    <div class="field"><label>Notas</label><textarea id="acDetalles" style="min-height:50px"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalAcuerdo')">Cancelar</button>
+      <button class="btn" id="btnGuardarAcuerdo" onclick="guardarAcuerdo()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -527,10 +558,10 @@ function cargarTodo() {
     if (!res.ok) { alert('Error cargando datos: ' + res.error); return; }
     DATA = res.data;
     localStorage.setItem('centro_ultimo_data', JSON.stringify(DATA)); // último dato bueno, para ver offline
-    renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderConfig();
+    renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig();
   }).catch(() => {
     const cache = localStorage.getItem('centro_ultimo_data');
-    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderConfig(); }
+    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig(); }
   });
 }
 
@@ -546,7 +577,7 @@ function irAVista(nombre) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + nombre).classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === nombre));
-  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', config: 'Configuración' };
+  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', config: 'Configuración' };
   document.getElementById('topbarTitle').textContent = titulos[nombre] || nombre;
 }
 function abrirConfig() { irAVista('config'); }
@@ -872,6 +903,50 @@ function guardarComida() {
       Carbohidratos: document.getElementById('cmCarbohidratos').value, Grasas: document.getElementById('cmGrasas').value
     }
   })).then(res => { if (res && res.ok) { cerrarModal('modalComida'); cargarTodo(); } });
+}
+
+// ============================================================================
+// ACUERDOS
+// ============================================================================
+let acuerdosFiltroEstado = 'Pendiente';
+function filtrarAcuerdos(estado) {
+  acuerdosFiltroEstado = estado;
+  document.querySelectorAll('#filtroAcuerdosEstado .pill').forEach(p => p.classList.toggle('on', p.dataset.estado === estado));
+  renderAcuerdos();
+}
+function renderAcuerdos() {
+  const todos = (DATA.ACUERDOS || []).slice().sort((a, b) => String(a.FechaLimite || '9999').localeCompare(String(b.FechaLimite || '9999')));
+  const lista = acuerdosFiltroEstado ? todos.filter(a => (a.Estado || 'Pendiente') === acuerdosFiltroEstado) : todos;
+  const cont = document.getElementById('listaAcuerdos');
+  if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin acuerdos aquí</div>'; return; }
+  cont.innerHTML = lista.map(a => `
+    <div class="list-row">
+      <div class="lr-main"><span class="lr-title">${escapeHtml(a.Titulo || '')}</span><span class="lr-sub">${a.ConQuien ? 'Con ' + escapeHtml(a.ConQuien) + ' · ' : ''}${escapeHtml(a.FechaLimite || 'sin fecha')}</span></div>
+      ${(a.Estado || 'Pendiente') !== 'Cumplido' ? `<button class="btn btn-sec btn-sm" onclick="marcarAcuerdoCumplido('${a.ID}')">Cumplir</button>` : '<span style="color:var(--green);font-size:13px">✓ Cumplido</span>'}
+    </div>`).join('');
+}
+function abrirModalAcuerdo() {
+  ['acTitulo', 'acConQuien', 'acDetalles'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('acFechaLimite').value = '';
+  abrirModal('modalAcuerdo');
+}
+function guardarAcuerdo() {
+  const titulo = document.getElementById('acTitulo').value.trim();
+  if (!titulo) return;
+  conEstadoGuardando('btnGuardarAcuerdo', () => apiCall('saveRow', {
+    table: 'ACUERDOS', row: {
+      Titulo: titulo, ConQuien: document.getElementById('acConQuien').value,
+      FechaLimite: document.getElementById('acFechaLimite').value,
+      Detalles: document.getElementById('acDetalles').value,
+      Estado: 'Pendiente', Usuario: usuarioActual.Nombre
+    }
+  })).then(res => { if (res && res.ok) { cerrarModal('modalAcuerdo'); cargarTodo(); } });
+}
+function marcarAcuerdoCumplido(id) {
+  apiCall('saveRow', { table: 'ACUERDOS', row: { ID: id, Estado: 'Cumplido', FechaCumplimiento: hoyISO() } }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    cargarTodo();
+  });
 }
 
 // ============================================================================
