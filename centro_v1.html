@@ -291,16 +291,45 @@ a{color:var(--accent)}
     <button class="fab" onclick="abrirModalAcuerdo()">+</button>
   </div>
 
-  <div class="view" id="view-viajes"><div class="empty-state">✈️ Itinerario — próximamente (fase 3)</div></div>
-  <div class="view" id="view-notas"><div class="empty-state">📝 Notas — próximamente (fase 3)</div></div>
+  <!-- ---- ITINERARIO ---- -->
+  <div class="view" id="view-viajes">
+    <div class="pill-group" id="viaProyectosPills" style="margin-bottom:10px"></div>
+    <div id="viaSinProyecto" class="card">
+      <p style="color:var(--ink2);font-size:13px;margin-bottom:10px">Crea tu primer viaje para empezar a planear días, transporte, hospedaje, pendientes y eventos.</p>
+      <button class="btn" onclick="viaAbrirCrearProyecto()">＋ Nuevo viaje</button>
+    </div>
+    <div id="viaBody" class="hidden">
+      <div class="fin-row-actions" style="margin-bottom:12px">
+        <button class="btn btn-sec btn-sm" onclick="viaAbrirCrearProyecto()">＋ Nuevo viaje</button>
+        <button class="btn btn-sec btn-sm" onclick="viaAbrirAgregarDias()">＋ Más días</button>
+        <button class="btn btn-sec btn-sm" onclick="viaRenombrarProyecto()">✏️ Renombrar</button>
+        <button class="btn btn-sec btn-sm" onclick="viaDuplicarProyecto()">📋 Duplicar como plantilla</button>
+        <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="viaEliminarProyecto()">🗑 Eliminar viaje</button>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-top:0">📝 Nota del viaje</div>
+        <textarea id="viaNotaTexto" placeholder="Vuelos, documentos, recordatorios generales..." style="width:100%;min-height:50px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px;background:var(--card2);color:var(--ink)" onblur="viaGuardarNota()"></textarea>
+      </div>
+      <div class="section-title">Pendientes sin programar</div>
+      <div class="card" id="viaSinProgramar"></div>
+      <div class="section-title">Días</div>
+      <div id="viaDias"></div>
+    </div>
+  </div>
+
+  <!-- ---- NOTAS (Organizador) ---- -->
+  <div class="view" id="view-notas">
+    <button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:12px" onclick="notaAbrirForm()">＋ Nueva nota</button>
+    <div class="card" id="listaNotas"><div class="loading">Cargando…</div></div>
+  </div>
 
   <!-- ---- CONFIGURACIÓN ---- -->
   <div class="view" id="view-config">
     <div class="section-title">Más módulos</div>
     <div class="card">
       <div class="folder-row" onclick="irAVista('acuerdos')"><span class="folder-icon">🤝</span><span class="lr-title">Acuerdos</span><span class="chevron">›</span></div>
-      <div class="folder-row" onclick="irAVista('viajes')"><span class="folder-icon">✈️</span><span class="lr-title">Itinerario</span><span class="chevron">›</span></div>
-      <div class="folder-row" onclick="irAVista('notas')"><span class="folder-icon">📝</span><span class="lr-title">Notas</span><span class="chevron">›</span></div>
+      <div class="folder-row" onclick="viaAbrir()"><span class="folder-icon">✈️</span><span class="lr-title">Itinerario</span><span class="chevron">›</span></div>
+      <div class="folder-row" onclick="notaAbrir()"><span class="folder-icon">📝</span><span class="lr-title">Notas</span><span class="chevron">›</span></div>
     </div>
     <div class="card">
       <div class="list-row"><div class="lr-main"><span class="lr-title">Versión</span><span class="lr-sub" id="versionTexto">—</span></div>
@@ -490,6 +519,43 @@ a{color:var(--accent)}
   </div>
 </div>
 
+<!-- ============ MODAL: viaje (crear / agregar días / duplicar) ============ -->
+<div id="modalViaProyecto" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalViaProyecto')">
+  <div class="modal-sheet">
+    <div class="modal-title" id="viaProyectoTitulo">Nuevo viaje</div>
+    <div id="viaProyectoFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="cerrarModal('modalViaProyecto')">Cancelar</button>
+      <button class="btn" id="viaProyectoSaveBtn" onclick="viaProyectoFormSave()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: ítem de Itinerario (transporte/hospedaje/pendiente/evento) ============ -->
+<div id="modalViaItem" class="modal-overlay hidden" onclick="if(event.target===this) viaCloseForm()">
+  <div class="modal-sheet">
+    <div class="modal-title" id="viaFormTitle">Nuevo</div>
+    <div id="viaFormFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="viaCloseForm()">Cancelar</button>
+      <button class="btn" id="viaFormSaveBtn" onclick="viaFormSave()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: nota (Organizador) ============ -->
+<div id="modalNota" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalNota')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nota</div>
+    <div class="field"><label>Título</label><input id="notaTitulo" type="text"></div>
+    <div class="field"><label>Contenido</label><textarea id="notaContenido" style="min-height:140px"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalNota')">Cancelar</button>
+      <button class="btn" id="btnGuardarNota" onclick="notaGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL: conciliación de estado de cuenta ============ -->
 <div id="modalConciliacion" class="modal-overlay hidden" onclick="if(event.target===this) finCerrarConciliacion()">
   <div class="modal-sheet" style="max-width:560px">
@@ -513,7 +579,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Tercera piedra — conciliación de tarjetas';
+const VERSION_APP = 'Cuarta piedra — Itinerario y Notas';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -2569,6 +2635,390 @@ async function finMarcarConciliadoFlow(estadoId) {
   } else {
     finMarcarConciliadoDirecto(estadoId);
   }
+}
+
+// ============================================================================
+// ITINERARIO — transplante real de itinerario_v56.html (fase 1: viajes, días,
+// transporte, hospedaje, pendientes/diario, eventos, nota del viaje). El
+// backend (Itinerario.js) ya trae todo — incluido geocoding/IA/chat/multi-
+// moneda — esta pieza cubre la captura/consulta manual; sugerencias de IA,
+// comparar transporte, chat y respaldos en PDF quedan para la siguiente.
+// "Proyecto" (viaje) no es una tabla propia — es la etiqueta de texto que ya
+// llevan DIAS/PENDIENTES/EVENTOS; la lista de viajes sale de los valores
+// distintos que ya existen en DIAS.
+// ============================================================================
+let viaData = { dias: [], transporte: [], hospedaje: [], pendientes: [], eventos: [] };
+let viaLoaded = false;
+let viaProyectoActivo = '';
+let viaProyectoModo = 'crear';
+let viaFormTipo = '', viaFormId = '';
+
+function viaAbrir() {
+  irAVista('viajes');
+  if (!viaLoaded) viaCargar(); else viaRenderTodo();
+}
+async function viaCargar() {
+  const r = await apiCall('getItinerario');
+  if (r) { viaData = { dias: r.dias || [], transporte: r.transporte || [], hospedaje: r.hospedaje || [], pendientes: r.pendientes || [], eventos: r.eventos || [] }; viaLoaded = true; }
+  viaRenderTodo();
+}
+function viaProyectosLista() {
+  const set = new Set();
+  viaData.dias.forEach(d => { if (d.proyecto) set.add(d.proyecto); });
+  return [...set].sort();
+}
+function viaDiaById(id) { return viaData.dias.find(d => d.id === id); }
+function viaDiasDelProyecto() { return viaData.dias.filter(d => d.proyecto === viaProyectoActivo).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))); }
+function viaFmtFecha(iso) { if (!iso) return '—'; try { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short' }); } catch (e) { return iso; } }
+function viaReservadoChip(r) { return ({ si: '<span class="chip" style="color:var(--green)">✓ reservado</span>', no_requiere: '<span class="chip">— no requiere</span>' })[r] || '<span class="chip" style="color:var(--orange)">pendiente de reservar</span>'; }
+
+function viaElegirProyecto(p) { viaProyectoActivo = p; viaRenderTodo(); }
+function viaRenderTodo() {
+  const proyectos = viaProyectosLista();
+  if (!viaProyectoActivo || !proyectos.includes(viaProyectoActivo)) viaProyectoActivo = proyectos[0] || '';
+  document.getElementById('viaProyectosPills').innerHTML = proyectos.map(p => `<span class="pill${p === viaProyectoActivo ? ' on' : ''}" onclick="viaElegirProyecto('${escapeHtml(p)}')">${escapeHtml(p)}</span>`).join('');
+  document.getElementById('viaSinProyecto').classList.toggle('hidden', !!viaProyectoActivo);
+  document.getElementById('viaBody').classList.toggle('hidden', !viaProyectoActivo);
+  if (!viaProyectoActivo) return;
+  viaRenderNota();
+  viaRenderSinProgramar();
+  viaRenderDias();
+}
+async function viaRenderNota() {
+  const r = await apiCall('cargarNotaProyecto', { proyecto: viaProyectoActivo });
+  document.getElementById('viaNotaTexto').value = (r && r.texto) || '';
+}
+function viaGuardarNota() { apiCall('guardarNotaProyecto', { proyecto: viaProyectoActivo, texto: document.getElementById('viaNotaTexto').value }); }
+
+function viaRenderSinProgramar() {
+  const items = viaData.pendientes.filter(p => p.proyecto === viaProyectoActivo && (!p.programado || !p.diaId));
+  const rows = items.map(viaPendienteRowHTML).join('') || '<div class="empty-state">Sin pendientes sueltos</div>';
+  document.getElementById('viaSinProgramar').innerHTML = rows + '<button class="btn btn-sec btn-sm" style="width:100%;margin-top:8px" onclick="viaOpenForm(\'pendiente\',\'\')">＋ Pendiente</button>';
+}
+function viaRenderDias() {
+  document.getElementById('viaDias').innerHTML = viaDiasDelProyecto().map(viaDiaCardHTML).join('') || '<div class="empty-state">Sin días — usa "＋ Más días"</div>';
+}
+function viaDiaCardHTML(dia) {
+  const transp = viaData.transporte.filter(t => t.diaId === dia.id).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  const hosp = viaData.hospedaje.filter(h => h.diaIdInicio === dia.id);
+  const evt = viaData.eventos.filter(e => e.diaIdInicio === dia.id);
+  const pend = viaData.pendientes.filter(p => p.diaId === dia.id && p.programado);
+  const rowsHtml = [...transp.map(viaTransporteRowHTML), ...hosp.map(viaHospedajeRowHTML), ...evt.map(viaEventoRowHTML), ...pend.map(viaPendienteRowHTML)].join('') || '<div class="empty-state">Sin planes este día</div>';
+  return `<div class="fin-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <strong>${escapeHtml(viaFmtFecha(dia.fecha))}${dia.zona ? (' · ' + escapeHtml(dia.zona)) : ''}</strong>
+      <span><button class="fin-mini-btn" onclick="viaEditarDia('${escapeHtml(dia.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="viaEliminarDia('${escapeHtml(dia.id)}')">🗑 día</button></span>
+    </div>
+    ${dia.notas ? `<div class="lr-sub linkify" style="margin-bottom:6px">${linkify(dia.notas)}</div>` : ''}
+    ${rowsHtml}
+    <div class="fin-row-actions" style="margin-top:6px">
+      <button class="fin-mini-btn" onclick="viaOpenForm('transporte','','${escapeHtml(dia.id)}')">＋ Transporte</button>
+      <button class="fin-mini-btn" onclick="viaOpenForm('hospedaje','','${escapeHtml(dia.id)}')">＋ Hospedaje</button>
+      <button class="fin-mini-btn" onclick="viaOpenForm('evento','','${escapeHtml(dia.id)}')">＋ Evento</button>
+      <button class="fin-mini-btn" onclick="viaOpenForm('pendiente','','${escapeHtml(dia.id)}')">＋ Pendiente</button>
+    </div>
+  </div>`;
+}
+function viaTransporteRowHTML(t) {
+  const op = (t.opciones && t.opciones[t.opcionElegida || 0]) || {};
+  return `<div class="list-row"><div class="lr-main"><span class="lr-title">🚆 ${escapeHtml(t.tipo || 'Transporte')} · ${escapeHtml(t.origen || '?')} → ${escapeHtml(t.destino || '?')}</span>
+    <span class="lr-sub">${op.salida ? ('Sale ' + escapeHtml(op.salida)) : ''}${op.llegada ? (' · Llega ' + escapeHtml(op.llegada)) : ''} ${viaReservadoChip(t.reservado)}</span></div>
+    <span><button class="fin-mini-btn" onclick="viaOpenForm('transporte','${escapeHtml(t.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="viaEliminar('transporte','${escapeHtml(t.id)}')">🗑</button></span></div>`;
+}
+function viaHospedajeRowHTML(h) {
+  const finDia = viaDiaById(h.diaIdFin);
+  return `<div class="list-row"><div class="lr-main"><span class="lr-title">🏨 ${escapeHtml(h.nombre || 'Hospedaje')}</span>
+    <span class="lr-sub">${finDia && h.diaIdFin !== h.diaIdInicio ? ('hasta ' + escapeHtml(viaFmtFecha(finDia.fecha)) + ' · ') : ''}${h.horaCheckIn ? ('check-in ' + escapeHtml(h.horaCheckIn)) : ''} ${viaReservadoChip(h.reservado)}</span></div>
+    <span><button class="fin-mini-btn" onclick="viaOpenForm('hospedaje','${escapeHtml(h.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="viaEliminar('hospedaje','${escapeHtml(h.id)}')">🗑</button></span></div>`;
+}
+function viaEventoRowHTML(e) {
+  const finDia = viaDiaById(e.diaIdFin);
+  return `<div class="list-row"><div class="lr-main"><span class="lr-title">🎟️ ${escapeHtml(e.nombre || 'Evento')}</span>
+    <span class="lr-sub">${finDia && e.diaIdFin !== e.diaIdInicio ? ('hasta ' + escapeHtml(viaFmtFecha(finDia.fecha)) + ' · ') : ''}${e.horaInicio ? escapeHtml(e.horaInicio) : ''} ${viaReservadoChip(e.reservado)}${e.realizado ? ' <span class="chip" style="color:var(--green)">✓ hecho</span>' : ''}</span></div>
+    <span><button class="fin-mini-btn" onclick="viaOpenForm('evento','${escapeHtml(e.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="viaEliminar('evento','${escapeHtml(e.id)}')">🗑</button></span></div>`;
+}
+function viaPendienteRowHTML(p) {
+  return `<div class="list-row"><div class="lr-main"><span class="lr-title">${p.esRestaurante ? '🍽️' : '📍'} ${escapeHtml(p.nombre || 'Pendiente')}${p.prioritaria ? ' ⭐' : ''}</span>
+    <span class="lr-sub">${p.horaInicio ? escapeHtml(p.horaInicio) : ''} ${viaReservadoChip(p.reservado)}${p.realizado ? ' <span class="chip" style="color:var(--green)">✓ hecho</span>' : ''}</span></div>
+    <span><button class="fin-mini-btn" onclick="viaOpenForm('pendiente','${escapeHtml(p.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="viaEliminar('pendiente','${escapeHtml(p.id)}')">🗑</button></span></div>`;
+}
+function viaEliminar(tipo, id) {
+  const acciones = { transporte: 'deleteTransporte', hospedaje: 'deleteHospedaje', pendiente: 'deletePendiente', evento: 'deleteEvento' };
+  pedirConfirmacion('Eliminar', '¿Eliminar esto del itinerario? No se puede deshacer.', () => apiCall(acciones[tipo], { id }).then(() => viaCargar()));
+}
+function viaEliminarDia(id) {
+  pedirConfirmacion('Eliminar día', '¿Eliminar este día? El transporte/hospedaje/eventos/pendientes ligados a él no se borran solos, se quedan huérfanos.', () => apiCall('deleteDia', { id }).then(() => viaCargar()));
+}
+async function viaEditarDia(id) {
+  const d = viaDiaById(id); if (!d) return;
+  const zona = prompt('Zona / ciudad este día:', d.zona || ''); if (zona === null) return;
+  const notas = prompt('Notas de este día:', d.notas || ''); if (notas === null) return;
+  await apiCall('updateDia', { id, zona: zona.trim(), notas: notas.trim() });
+  viaCargar();
+}
+
+// ---- viaje (proyecto): crear / agregar días / renombrar / duplicar / eliminar ----
+function viaAbrirCrearProyecto() {
+  viaProyectoModo = 'crear';
+  document.getElementById('viaProyectoTitulo').textContent = 'Nuevo viaje';
+  document.getElementById('viaProyectoFields').innerHTML =
+    '<div class="pf-field"><label>Nombre del viaje</label><input id="viaPNombre" placeholder="Ej. Japón 2027"></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="pf-field"><label>Fecha inicio</label><input id="viaPInicio" type="date"></div><div class="pf-field"><label>Fecha fin</label><input id="viaPFin" type="date"></div></div>' +
+    '<div class="pf-field"><label>Zona / ciudad (opcional)</label><input id="viaPZona" placeholder="Ej. Tokio"></div>';
+  abrirModal('modalViaProyecto');
+}
+function viaAbrirAgregarDias() {
+  if (!viaProyectoActivo) { showToast('Elige o crea un viaje primero'); return; }
+  viaProyectoModo = 'agregarDias';
+  document.getElementById('viaProyectoTitulo').textContent = 'Agregar días a "' + viaProyectoActivo + '"';
+  document.getElementById('viaProyectoFields').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="pf-field"><label>Desde</label><input id="viaPInicio" type="date"></div><div class="pf-field"><label>Hasta</label><input id="viaPFin" type="date"></div></div>' +
+    '<div class="pf-field"><label>Zona / ciudad (opcional)</label><input id="viaPZona" placeholder="Ej. Tokio"></div>';
+  abrirModal('modalViaProyecto');
+}
+function viaDuplicarProyecto() {
+  if (!viaProyectoActivo) return;
+  viaProyectoModo = 'duplicar';
+  document.getElementById('viaProyectoTitulo').textContent = 'Duplicar "' + viaProyectoActivo + '" como plantilla';
+  document.getElementById('viaProyectoFields').innerHTML =
+    '<p style="font-size:12px;color:var(--ink2);margin-bottom:8px">Copia días, transporte, hospedaje y pendientes (sin reservaciones, diario ni fotos) a un viaje nuevo.</p>' +
+    '<div class="pf-field"><label>Nombre del nuevo viaje</label><input id="viaPNombre" placeholder="Ej. Japón 2028"></div>' +
+    '<div class="pf-field"><label>Nueva fecha de inicio</label><input id="viaPInicio" type="date"></div>';
+  abrirModal('modalViaProyecto');
+}
+async function viaProyectoFormSave() {
+  const btn = document.getElementById('viaProyectoSaveBtn');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  let r;
+  if (viaProyectoModo === 'crear') {
+    const nombre = document.getElementById('viaPNombre').value.trim();
+    if (!nombre) { showToast('Escribe un nombre'); btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    r = await apiCall('crearProyecto', { proyecto: nombre, fechaInicio: document.getElementById('viaPInicio').value, fechaFin: document.getElementById('viaPFin').value, zona: document.getElementById('viaPZona').value.trim() });
+    if (r && r.ok) viaProyectoActivo = nombre;
+  } else if (viaProyectoModo === 'agregarDias') {
+    r = await apiCall('agregarRangoDias', { proyecto: viaProyectoActivo, fechaInicio: document.getElementById('viaPInicio').value, fechaFin: document.getElementById('viaPFin').value, zona: document.getElementById('viaPZona').value.trim() });
+  } else if (viaProyectoModo === 'duplicar') {
+    const nombre = document.getElementById('viaPNombre').value.trim();
+    if (!nombre) { showToast('Escribe un nombre'); btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    r = await apiCall('duplicarProyecto', { proyectoOrigen: viaProyectoActivo, proyectoNuevo: nombre, fechaInicioNueva: document.getElementById('viaPInicio').value });
+    if (r && r.ok) viaProyectoActivo = nombre;
+  }
+  btn.disabled = false; btn.textContent = 'Guardar';
+  if (r && r.ok) { cerrarModal('modalViaProyecto'); showToast('✓ Guardado'); viaCargar(); }
+  else showToast('⚠ ' + ((r && r.error) || 'Error'));
+}
+function viaRenombrarProyecto() {
+  if (!viaProyectoActivo) return;
+  const nuevo = prompt('Nuevo nombre para "' + viaProyectoActivo + '":', viaProyectoActivo);
+  if (!nuevo || !nuevo.trim() || nuevo.trim() === viaProyectoActivo) return;
+  apiCall('renombrarProyecto', { viejo: viaProyectoActivo, nuevo: nuevo.trim() }).then(r => {
+    if (r && r.ok) { viaProyectoActivo = nuevo.trim(); viaCargar(); } else showToast('⚠ ' + ((r && r.error) || 'Error'));
+  });
+}
+function viaEliminarProyecto() {
+  if (!viaProyectoActivo) return;
+  pedirConfirmacion('Eliminar viaje', '¿Eliminar "' + viaProyectoActivo + '" por completo? Días y pendientes se borran; transporte/hospedaje/eventos sueltos no se limpian solos.', () => {
+    apiCall('eliminarProyecto', { proyecto: viaProyectoActivo }).then(r => {
+      if (r && r.ok) { viaProyectoActivo = ''; viaCargar(); } else showToast('⚠ ' + ((r && r.error) || 'Error'));
+    });
+  });
+}
+
+// ---- ítem (transporte/hospedaje/evento/pendiente): crear/editar ----
+function viaDiaOptions(sel) { return viaDiasDelProyecto().map(d => `<option value="${escapeHtml(d.id)}"${sel === d.id ? ' selected' : ''}>${escapeHtml(viaFmtFecha(d.fecha))}</option>`).join(''); }
+function viaOpenForm(tipo, id, diaIdDefault) {
+  const arrMap = { transporte: 'transporte', hospedaje: 'hospedaje', pendiente: 'pendientes', evento: 'eventos' };
+  const item = id ? viaData[arrMap[tipo]].find(x => x.id === id) : { diaId: diaIdDefault || '', diaIdInicio: diaIdDefault || '', diaIdFin: diaIdDefault || '', programado: !!diaIdDefault };
+  viaFormTipo = tipo; viaFormId = id || '';
+  const titulos = { transporte: '🚆 Transporte', hospedaje: '🏨 Hospedaje', pendiente: '📍 Pendiente', evento: '🎟️ Evento' };
+  document.getElementById('viaFormTitle').textContent = (id ? 'Editar ' : 'Nuevo ') + titulos[tipo];
+  document.getElementById('viaFormFields').innerHTML = viaFormFieldsHTML(tipo, item || {});
+  abrirModal('modalViaItem');
+}
+function viaFormTieneDatos() {
+  const cont = document.getElementById('viaFormFields'); if (!cont) return false;
+  return [...cont.querySelectorAll('input,select,textarea')].some(el => { if (el.type === 'checkbox') return el.checked; return el.value && String(el.value).trim() !== ''; });
+}
+function viaCloseForm() { intentarCerrarModal('modalViaItem', viaFormTieneDatos()); }
+function viaSetReservado(v) {
+  document.getElementById('viaReservado').value = v;
+  document.getElementById('viaResSi').className = 'tbtn' + (v === 'si' ? ' sel' : '');
+  document.getElementById('viaResPend').className = 'tbtn' + (v === 'pendiente' ? ' sel' : '');
+  document.getElementById('viaResNo').className = 'tbtn' + (v === 'no_requiere' ? ' sel' : '');
+}
+function viaFormFieldsHTML(tipo, it) {
+  it = it || {};
+  const F = (label, id, val, attrs) => `<div class="pf-field"><label>${label}</label><input id="${id}" value="${escapeHtml(val || '')}" ${attrs || ''}></div>`;
+  const TA = (label, id, val, attrs) => `<div class="pf-field"><label>${label}</label><textarea id="${id}" ${attrs || ''}>${escapeHtml(val || '')}</textarea></div>`;
+  const CB = (label, id, checked) => `<div class="pf-field"><label><input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="width:auto;margin-right:6px">${label}</label></div>`;
+  const reservadoSel = (val) => `<div class="pf-field"><label>Reservado</label><div style="display:flex;gap:8px">
+      <button type="button" class="tbtn${(val || 'pendiente') === 'si' ? ' sel' : ''}" id="viaResSi" onclick="viaSetReservado('si')">✓ Sí</button>
+      <button type="button" class="tbtn${(val || 'pendiente') === 'pendiente' ? ' sel' : ''}" id="viaResPend" onclick="viaSetReservado('pendiente')">⏳ Pendiente</button>
+      <button type="button" class="tbtn${val === 'no_requiere' ? ' sel' : ''}" id="viaResNo" onclick="viaSetReservado('no_requiere')">— No requiere</button>
+    </div><input type="hidden" id="viaReservado" value="${val || 'pendiente'}"></div>`;
+  if (tipo === 'transporte') {
+    const op = (it.opciones && it.opciones[0]) || {};
+    return F('Tipo', 'viaTipo', it.tipo, 'placeholder="Vuelo, tren, autobús, taxi..." list="list-tipo-transporte" id="viaFormFirst"')
+      + '<datalist id="list-tipo-transporte"><option value="Vuelo"><option value="Tren"><option value="Autobús"><option value="Taxi"><option value="Auto rentado"><option value="Caminando"></datalist>'
+      + `<div class="pf-field"><label>Día</label><select id="viaDiaId">${viaDiaOptions(it.diaId)}</select></div>`
+      + F('Origen', 'viaOrigen', it.origen, 'placeholder="Desde dónde"')
+      + F('Destino', 'viaDestino', it.destino, 'placeholder="Hacia dónde"')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${F('Hora salida', 'viaSalida', op.salida, 'type="time"')}${F('Hora llegada', 'viaLlegada', op.llegada, 'type="time"')}</div>`
+      + reservadoSel(it.reservado)
+      + CB('Ya realizado', 'viaRealizado', it.realizado)
+      + TA('Notas', 'viaNotas', it.notas, 'placeholder="Número de vuelo, terminal, boleto..."');
+  }
+  if (tipo === 'hospedaje') {
+    return F('Nombre', 'viaNombre', it.nombre, 'placeholder="Hotel, Airbnb..." id="viaFormFirst"')
+      + F('Dirección', 'viaDireccion', it.direccion, '')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="pf-field"><label>Día de llegada</label><select id="viaDiaIdInicio">${viaDiaOptions(it.diaIdInicio)}</select></div>
+          <div class="pf-field"><label>Día de salida</label><select id="viaDiaIdFin">${viaDiaOptions(it.diaIdFin || it.diaIdInicio)}</select></div>
+        </div>`
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${F('Check-in', 'viaCheckIn', it.horaCheckIn, 'type="time"')}${F('Check-out', 'viaCheckOut', it.horaCheckOut, 'type="time"')}</div>`
+      + reservadoSel(it.reservado)
+      + TA('Notas', 'viaNotas', it.notas, '');
+  }
+  if (tipo === 'evento') {
+    return F('Nombre', 'viaNombre', it.nombre, 'placeholder="Festival, concierto, museo..." id="viaFormFirst"')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="pf-field"><label>Día inicio</label><select id="viaDiaIdInicio">${viaDiaOptions(it.diaIdInicio)}</select></div>
+          <div class="pf-field"><label>Día fin</label><select id="viaDiaIdFin">${viaDiaOptions(it.diaIdFin || it.diaIdInicio)}</select></div>
+        </div>`
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${F('Hora inicio', 'viaHoraInicio', it.horaInicio, 'type="time"')}${F('Hora fin', 'viaHoraFin', it.horaFin, 'type="time"')}</div>`
+      + F('Categoría', 'viaCategoria', it.categoria, 'placeholder="Concierto, museo, deporte..."')
+      + F('Página web', 'viaPaginaWeb', it.paginaWeb, 'placeholder="https://..."')
+      + reservadoSel(it.reservado)
+      + CB('Ya realizado', 'viaRealizado', it.realizado)
+      + TA('Notas', 'viaNotas', it.notas, '');
+  }
+  if (tipo === 'pendiente') {
+    const prog = it.programado !== undefined ? !!it.programado : !!it.diaId;
+    return F('Nombre', 'viaNombre', it.nombre, 'placeholder="Qué quieres hacer/visitar" id="viaFormFirst"')
+      + F('Dirección (opcional)', 'viaDireccion', it.direccion, '')
+      + `<div class="pf-field"><label><input type="checkbox" id="viaProgramado" ${prog ? 'checked' : ''} onchange="document.getElementById('viaDiaWrap').style.display=this.checked?'block':'none'" style="width:auto;margin-right:6px">Ya tiene día asignado</label></div>`
+      + `<div class="pf-field" id="viaDiaWrap" style="${prog ? '' : 'display:none'}"><label>Día</label><select id="viaDiaId">${viaDiaOptions(it.diaId)}</select></div>`
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${F('Hora inicio', 'viaHoraInicio', it.horaInicio, 'type="time"')}${F('Hora fin', 'viaHoraFin', it.horaFin, 'type="time"')}</div>`
+      + CB('Es restaurante / comida', 'viaEsRestaurante', it.esRestaurante)
+      + CB('Prioritario', 'viaPrioritaria', it.prioritaria)
+      + reservadoSel(it.reservado)
+      + CB('Ya realizado', 'viaRealizado', it.realizado)
+      + TA('Notas (antes de ir)', 'viaNotasPrevias', it.notasPrevias, '')
+      + TA('Notas del diario (después de ir)', 'viaNotasDiario', it.notasDiario, '');
+  }
+  return '';
+}
+async function viaFormSave() {
+  const t = viaFormTipo;
+  const btn = document.getElementById('viaFormSaveBtn');
+  const reservado = document.getElementById('viaReservado') ? document.getElementById('viaReservado').value : 'pendiente';
+  let action, body;
+  if (t === 'transporte') {
+    if (!document.getElementById('viaOrigen').value.trim() && !document.getElementById('viaDestino').value.trim()) { showToast('Pon al menos origen o destino'); return; }
+    body = {
+      diaId: document.getElementById('viaDiaId').value, tipo: document.getElementById('viaTipo').value.trim(),
+      origen: document.getElementById('viaOrigen').value.trim(), destino: document.getElementById('viaDestino').value.trim(),
+      opciones: [{ salida: document.getElementById('viaSalida').value, llegada: document.getElementById('viaLlegada').value, notas: '' }],
+      opcionElegida: 0, reservado, notas: document.getElementById('viaNotas').value.trim(),
+      realizado: document.getElementById('viaRealizado').checked
+    };
+    action = viaFormId ? 'updateTransporte' : 'saveTransporte';
+  } else if (t === 'hospedaje') {
+    if (!document.getElementById('viaNombre').value.trim()) { showToast('Escribe un nombre'); return; }
+    body = {
+      diaIdInicio: document.getElementById('viaDiaIdInicio').value, diaIdFin: document.getElementById('viaDiaIdFin').value,
+      nombre: document.getElementById('viaNombre').value.trim(), direccion: document.getElementById('viaDireccion').value.trim(),
+      horaCheckIn: document.getElementById('viaCheckIn').value, horaCheckOut: document.getElementById('viaCheckOut').value,
+      reservado, notas: document.getElementById('viaNotas').value.trim()
+    };
+    action = viaFormId ? 'updateHospedaje' : 'saveHospedaje';
+  } else if (t === 'evento') {
+    if (!document.getElementById('viaNombre').value.trim()) { showToast('Escribe un nombre'); return; }
+    body = {
+      nombre: document.getElementById('viaNombre').value.trim(), diaIdInicio: document.getElementById('viaDiaIdInicio').value, diaIdFin: document.getElementById('viaDiaIdFin').value,
+      horaInicio: document.getElementById('viaHoraInicio').value, horaFin: document.getElementById('viaHoraFin').value,
+      categoria: document.getElementById('viaCategoria').value.trim(), paginaWeb: document.getElementById('viaPaginaWeb').value.trim(),
+      reservado, realizado: document.getElementById('viaRealizado').checked, notas: document.getElementById('viaNotas').value.trim(),
+      proyecto: viaProyectoActivo
+    };
+    action = viaFormId ? 'updateEvento' : 'saveEvento';
+  } else if (t === 'pendiente') {
+    if (!document.getElementById('viaNombre').value.trim()) { showToast('Escribe un nombre'); return; }
+    const programado = document.getElementById('viaProgramado').checked;
+    body = {
+      nombre: document.getElementById('viaNombre').value.trim(), direccion: document.getElementById('viaDireccion').value.trim(),
+      programado, diaId: programado ? document.getElementById('viaDiaId').value : '',
+      horaInicio: document.getElementById('viaHoraInicio').value, horaFin: document.getElementById('viaHoraFin').value,
+      esRestaurante: document.getElementById('viaEsRestaurante').checked, prioritaria: document.getElementById('viaPrioritaria').checked,
+      reservado, realizado: document.getElementById('viaRealizado').checked,
+      notasPrevias: document.getElementById('viaNotasPrevias').value.trim(), notasDiario: document.getElementById('viaNotasDiario').value.trim(),
+      proyecto: viaProyectoActivo
+    };
+    action = viaFormId ? 'updatePendiente' : 'savePendiente';
+  } else return;
+  if (viaFormId) body.id = viaFormId;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const r = await apiCall(action, body);
+  btn.disabled = false; btn.textContent = 'Guardar';
+  if (r && r.ok) { cerrarModal('modalViaItem'); showToast('✓ Guardado'); viaCargar(); }
+  else showToast('⚠ ' + ((r && r.error) || 'Error al guardar'));
+}
+
+// ============================================================================
+// NOTAS — transplante real de NOTAS en Organizador.js (saveRowOrg/getAllOrg/
+// deleteRowOrg, genéricos para TODAS las tablas de Organizador). Solo
+// Titulo/Contenido por ahora — Tags, Notebook, método Cornell, Pinned,
+// plantillas y hábitos son el resto del Organizador real, para otra pieza.
+// saveRow_Org reemplaza la fila COMPLETA con lo que le mandes (no hace merge
+// parcial) — por eso aquí siempre se parte de la nota ya cargada y solo se
+// pisan Titulo/Contenido/FechaEdicion, nunca se manda un objeto a medias.
+// ============================================================================
+let notaItems = [];
+let notaLoaded = false;
+let notaEditId = '';
+function notaAbrir() {
+  irAVista('notas');
+  if (!notaLoaded) notaCargar(); else notaRender();
+}
+async function notaCargar() {
+  const r = await apiCall('getAllOrg');
+  if (r && r.ok) { notaItems = (r.data && r.data.notas) || []; notaLoaded = true; }
+  notaRender();
+}
+function notaEsPapelera(n) { return n.Papelera === true || String(n.Papelera).toLowerCase() === 'true'; }
+function notaRender() {
+  const activas = notaItems.filter(n => !notaEsPapelera(n)).sort((a, b) => String(b.FechaEdicion || b.Fecha || '').localeCompare(String(a.FechaEdicion || a.Fecha || '')));
+  const cont = document.getElementById('listaNotas');
+  if (!activas.length) { cont.innerHTML = '<div class="empty-state">Sin notas todavía</div>'; return; }
+  cont.innerHTML = activas.map(n => `<div class="list-row">
+    <div class="lr-main" style="cursor:pointer" onclick="notaAbrirForm('${escapeHtml(n.ID)}')"><span class="lr-title">${escapeHtml(n.Titulo || '(sin título)')}</span><span class="lr-sub">${escapeHtml((n.Contenido || '').slice(0, 90))}</span></div>
+    <button class="btn btn-danger btn-sm" onclick="notaEliminar('${escapeHtml(n.ID)}')">Eliminar</button>
+  </div>`).join('');
+}
+function notaAbrirForm(id) {
+  notaEditId = id || '';
+  const n = id ? notaItems.find(x => x.ID === id) : null;
+  document.getElementById('notaTitulo').value = n ? (n.Titulo || '') : '';
+  document.getElementById('notaContenido').value = n ? (n.Contenido || '') : '';
+  abrirModal('modalNota');
+}
+function notaGuardar() {
+  const titulo = document.getElementById('notaTitulo').value.trim();
+  const contenido = document.getElementById('notaContenido').value;
+  if (!titulo && !contenido.trim()) return;
+  const existente = notaEditId ? notaItems.find(x => x.ID === notaEditId) : null;
+  const hoy = new Date().toISOString();
+  const row = Object.assign({}, existente, { ID: notaEditId || undefined, Titulo: titulo, Contenido: contenido, Fecha: (existente && existente.Fecha) || hoy, FechaEdicion: hoy });
+  conEstadoGuardando('btnGuardarNota', () => apiCall('saveRowOrg', { table: 'NOTAS', row })).then(res => {
+    if (res && res.ok) { cerrarModal('modalNota'); notaCargar(); }
+  });
+}
+function notaEliminar(id) {
+  const n = notaItems.find(x => x.ID === id); if (!n) return;
+  pedirConfirmacion('Eliminar nota', '¿Mandar esta nota a la papelera?', () => {
+    const row = Object.assign({}, n, { Papelera: true, FechaEdicion: new Date().toISOString() });
+    apiCall('saveRowOrg', { table: 'NOTAS', row }).then(() => notaCargar());
+  });
 }
 </script>
 </body>
