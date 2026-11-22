@@ -228,6 +228,8 @@ a{color:var(--accent)}
 
   <!-- ---- GASTOS ---- -->
   <div class="view" id="view-gastos">
+    <div class="pill-group" id="sesPills" style="margin-bottom:10px"></div>
+    <div class="card hidden" id="sesVeredicto" style="font-size:13px"></div>
     <div class="card" id="resumenGastos"></div>
     <button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:12px" onclick="finOpen()">💳 Finanzas personales (vault)</button>
     <div class="section-title">Movimientos</div>
@@ -379,6 +381,17 @@ a{color:var(--accent)}
     <div class="field"><label>Costo</label><input id="gCosto" type="number" step="0.01"></div>
     <div class="field"><label>Moneda</label><input id="gMoneda" type="text" value="MXN"></div>
     <div class="field"><label>Tienda</label><input id="gTienda" type="text"></div>
+    <div class="field hidden" id="gQuienPagaWrap"><label>¿Quién paga?</label><select id="gQuienPaga" onchange="sesOnQuienPagaChange()"></select></div>
+    <div class="field hidden" id="gTipoWrap">
+      <label>Tipo</label>
+      <select id="gTipo" onchange="sesOnTipoChange()">
+        <option value="Personal">Personal (solo mío)</option>
+        <option value="Compartido">Compartido (se reparte)</option>
+        <option value="Prestamo">Préstamo (le presté a alguien)</option>
+        <option value="Devolucion">Devolución (me devuelven)</option>
+      </select>
+    </div>
+    <div class="field hidden" id="gParticipantesWrap"><label id="gParticipantesLabel">¿Entre quiénes se reparte?</label><div class="pill-group" id="gParticipantesPills"></div></div>
     <div class="field"><label>Forma de pago</label>
       <select id="gMetodo" onchange="finOnMetodoChangeGasto()">
         <option value="">—</option>
@@ -579,7 +592,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Cuarta piedra — Itinerario y Notas';
+const VERSION_APP = 'Quinta piedra — sesiones compartidas en Gastos';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -722,9 +735,11 @@ function iniciarApp() {
   cargarTodo();
 }
 
-function cargarTodo() {
+async function cargarTodo() {
+  await sesCargarMiembrosActiva();
+  sesCargarListaPills();
   Promise.all([
-    apiCall('getGastos'),
+    apiCall('getGastos', { sesion: sesActiva, pass: sesActiva ? (localStorage.getItem(sesPassKey(sesActiva)) || '') : '' }),
     apiCall('getAllRopa'),
     apiCall('getAllAcuerdos'),
     apiCall('getAllComidas'),
@@ -873,12 +888,14 @@ function confirmarResultadoIA() {
 function renderGastos() {
   const gastos = (DATA.gastos || []).filter(g => g.tipoFila !== 'producto').slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   const totalMes = gastos.filter(g => String(g.fecha).slice(0, 7) === hoyISO().slice(0, 7)).reduce((s, g) => s + (Number(g.costo) || 0), 0);
-  document.getElementById('resumenGastos').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Este mes</span></div><span class="lr-val">${money(totalMes)}</span></div>`;
+  document.getElementById('resumenGastos').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Este mes${sesActiva ? (' · ' + escapeHtml(sesActiva)) : ''}</span></div><span class="lr-val">${money(totalMes)}</span></div>`;
+  sesRenderVeredicto(gastos);
   const cont = document.getElementById('listaGastos');
   if (!gastos.length) { cont.innerHTML = '<div class="empty-state">Sin gastos todavía</div>'; return; }
+  const tipoChip = { Compartido: '🤝 Compartido', Prestamo: '➡️ Préstamo', Devolucion: '⬅️ Devolución' };
   cont.innerHTML = gastos.slice(0, 50).map(g => `
     <div class="list-row">
-      <div class="lr-main"><span class="lr-title">${escapeHtml(g.concepto || '(sin concepto)')}</span><span class="lr-sub">${escapeHtml(g.fecha || '')} · ${escapeHtml(g.tienda || '')}</span></div>
+      <div class="lr-main"><span class="lr-title">${escapeHtml(g.concepto || '(sin concepto)')}</span><span class="lr-sub">${escapeHtml(g.fecha || '')} · ${escapeHtml(g.tienda || '')}${g.quien_paga ? (' · pagó ' + escapeHtml(g.quien_paga)) : ''}${tipoChip[g.compartido] ? (' · ' + tipoChip[g.compartido]) : ''}</span></div>
       <span class="lr-val">${money(g.costo, g.moneda)}</span>
     </div>`).join('');
 }
@@ -894,9 +911,21 @@ function abrirModalGasto() {
   document.getElementById('gMsi').checked = false;
   document.getElementById('gMsiMeses').value = '';
   finOnMetodoChangeGasto();
+  document.getElementById('gQuienPagaWrap').classList.toggle('hidden', sesMiembros.length < 2);
+  document.getElementById('gTipoWrap').classList.toggle('hidden', sesMiembros.length < 2);
+  if (sesMiembros.length >= 2) {
+    document.getElementById('gQuienPaga').innerHTML = sesMiembros.map(m => `<option value="${escapeHtml(m)}"${m === usuarioActual.Nombre ? ' selected' : ''}>${escapeHtml(m)}</option>`).join('');
+    document.getElementById('gTipo').value = 'Personal';
+    sesRenderParticipantesPills();
+  }
+  document.getElementById('gParticipantesWrap').classList.add('hidden');
   abrirModal('modalGasto');
 }
 function guardarGasto() {
+  const esSesion = sesMiembros.length >= 2;
+  const tipo = esSesion ? document.getElementById('gTipo').value : 'Personal';
+  const quienPaga = esSesion ? document.getElementById('gQuienPaga').value : usuarioActual.Nombre;
+  const participantes = (esSesion && tipo !== 'Personal') ? sesParticipantesElegidos() : [];
   conEstadoGuardando('btnGuardarGasto', () => apiCall('saveGasto', {
     concepto: document.getElementById('gConcepto').value,
     costo: document.getElementById('gCosto').value,
@@ -906,8 +935,158 @@ function guardarGasto() {
     categoria: document.getElementById('gCategoria').value,
     notas: document.getElementById('gNotas').value,
     fecha: document.getElementById('gFecha').value,
-    quien_paga: usuarioActual.Nombre
+    quien_paga: quienPaga,
+    compartido: tipo,
+    participantes: participantes,
+    sesion: sesActiva
   })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); finTrasGuardarGasto(res); cargarTodo(); } });
+}
+
+// ============================================================================
+// SESIONES COMPARTIDAS — transplante real de getSesiones/checkSesion/addSesion/
+// renameSesion/addMember/deleteMember/renameMember (ya en Gastos.js) y del
+// algoritmo de reparto/deudas v31Deudas/v31Netos/v31Simplificar de
+// Compras_v46.html. "Todos" (sin sesión) trae TODO sin filtrar — el password
+// real de una sesión con nombre sí restringe en el servidor qué filas llegan
+// (ver getGastos(sesion,pass)), no es solo cosmético en el cliente.
+// ============================================================================
+let sesLista = [];
+let sesActiva = localStorage.getItem('centro_gastos_sesion') || '';
+let sesMiembros = [];
+function sesPassKey(nombre) { return 'centro_gastos_sesion_pass_' + nombre; }
+async function sesCargarListaPills() {
+  const r = await apiCall('getSesiones');
+  sesLista = (r && r.sesiones) || [];
+  sesRenderPills();
+}
+async function sesCargarMiembrosActiva() {
+  if (!sesActiva) { sesMiembros = []; return; }
+  const pass = localStorage.getItem(sesPassKey(sesActiva)) || '';
+  const r = await apiCall('checkSesion', { sesion: sesActiva, pass });
+  sesMiembros = (r && r.ok) ? (r.miembros || []) : [];
+}
+function sesRenderPills() {
+  const host = document.getElementById('sesPills'); if (!host) return;
+  host.innerHTML = '<span class="pill' + (!sesActiva ? ' on' : '') + '" onclick="sesElegir(\'\')">Todos</span>' +
+    sesLista.map(s => `<span class="pill${s === sesActiva ? ' on' : ''}" onclick="sesElegir('${escapeHtml(s).replace(/'/g, "\\'")}')">${escapeHtml(s)}</span>`).join('') +
+    '<span class="pill" onclick="sesAbrirCrear()">➕ Sesión</span>' +
+    (sesActiva ? '<span class="pill" onclick="sesGestionarMiembros()">👥 Miembros</span>' : '');
+}
+async function sesElegir(nombre) {
+  if (nombre === sesActiva) return;
+  if (!nombre) { sesActiva = ''; localStorage.setItem('centro_gastos_sesion', ''); sesMiembros = []; sesRenderPills(); cargarTodo(); return; }
+  let pass = localStorage.getItem(sesPassKey(nombre)) || '';
+  let r = await apiCall('checkSesion', { sesion: nombre, pass });
+  if (!r || !r.ok) {
+    pass = prompt('Contraseña de la sesión "' + nombre + '" (vacío si no tiene):', '') || '';
+    r = await apiCall('checkSesion', { sesion: nombre, pass });
+    if (!r || !r.ok) { showToast('⚠ ' + ((r && r.error) || 'Contraseña incorrecta')); return; }
+  }
+  localStorage.setItem(sesPassKey(nombre), pass);
+  sesActiva = nombre; localStorage.setItem('centro_gastos_sesion', nombre);
+  sesMiembros = r.miembros || [];
+  sesRenderPills();
+  cargarTodo();
+}
+function sesAbrirCrear() {
+  const nombre = prompt('Nombre de la nueva sesión (ej. "Casa", "Pareja"):'); if (!nombre || !nombre.trim()) return;
+  const miembrosTxt = prompt('Miembros, separados por coma:', usuarioActual.Nombre); if (miembrosTxt === null) return;
+  const pass = prompt('Contraseña de esta sesión (opcional, déjalo vacío si no quieres):', '') || '';
+  apiCall('addSesion', { sesion: nombre.trim(), miembros: miembrosTxt, pass }).then(r => {
+    if (r && r.ok) { localStorage.setItem(sesPassKey(nombre.trim()), pass); sesCargarListaPills(); sesElegir(nombre.trim()); }
+    else showToast('⚠ ' + ((r && r.error) || 'Error'));
+  });
+}
+function sesGestionarMiembros() {
+  if (!sesActiva) return;
+  const pass = localStorage.getItem(sesPassKey(sesActiva)) || '';
+  const accion = (prompt('Miembros actuales: ' + sesMiembros.join(', ') + '\n\n1 = Agregar\n2 = Renombrar\n3 = Quitar\n\nEscribe 1, 2 o 3:', '1') || '').trim();
+  if (accion === '1') {
+    const n = prompt('Nombre del nuevo miembro:'); if (!n || !n.trim()) return;
+    apiCall('addMember', { sesion: sesActiva, pass, nombre: n.trim() }).then(r => { if (r && r.ok) { sesMiembros = r.miembros; sesRenderPills(); showToast('✓ Agregado'); } else showToast('⚠ ' + ((r && r.error) || 'Error')); });
+  } else if (accion === '2') {
+    const viejo = prompt('¿A quién renombrar? (' + sesMiembros.join(', ') + ')'); if (!viejo) return;
+    const nuevo = prompt('Nuevo nombre para "' + viejo + '":'); if (!nuevo || !nuevo.trim()) return;
+    apiCall('renameMember', { sesion: sesActiva, pass, viejo: viejo.trim(), nuevo: nuevo.trim() }).then(r => { if (r && r.ok) { sesMiembros = r.miembros; sesRenderPills(); cargarTodo(); } else showToast('⚠ ' + ((r && r.error) || 'Error')); });
+  } else if (accion === '3') {
+    const n = prompt('¿A quién quitar? (' + sesMiembros.join(', ') + ')'); if (!n) return;
+    pedirConfirmacion('Quitar miembro', '¿Quitar a "' + n + '" de esta sesión?', () => {
+      apiCall('deleteMember', { sesion: sesActiva, pass, nombre: n.trim() }).then(r => { if (r && r.ok) { sesMiembros = r.miembros; sesRenderPills(); } else showToast('⚠ ' + ((r && r.error) || 'Error')); });
+    });
+  }
+}
+function sesOnQuienPagaChange() { sesRenderParticipantesPills(); }
+function sesOnTipoChange() {
+  const tipo = document.getElementById('gTipo').value;
+  const wrap = document.getElementById('gParticipantesWrap');
+  if (tipo === 'Personal') { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  document.getElementById('gParticipantesLabel').textContent = tipo === 'Compartido' ? '¿Entre quiénes se reparte? (vacío = todos)' : (tipo === 'Prestamo' ? '¿A quién le prestaste?' : '¿Quién te devuelve?');
+  sesRenderParticipantesPills();
+}
+function sesRenderParticipantesPills() {
+  const host = document.getElementById('gParticipantesPills'); if (!host) return;
+  const quien = document.getElementById('gQuienPaga').value;
+  host.innerHTML = sesMiembros.filter(m => m !== quien).map(m => `<span class="pill" data-m="${escapeHtml(m)}" onclick="this.classList.toggle('on')">${escapeHtml(m)}</span>`).join('');
+}
+function sesParticipantesElegidos() {
+  return [...document.querySelectorAll('#gParticipantesPills .pill.on')].map(p => p.dataset.m);
+}
+function sesParticipantesEf(e) {
+  const q = e.quien_paga;
+  let parts = Array.isArray(e.participantes) ? e.participantes.filter(n => sesMiembros.includes(n)) : [];
+  if (e.compartido === 'Compartido') {
+    if (!parts.length) parts = sesMiembros.slice();
+    if (q && sesMiembros.includes(q) && !parts.includes(q)) parts.push(q);
+    return parts;
+  }
+  return parts.filter(n => n !== q);
+}
+function sesDeudas(gastos) {
+  const debt = {}; sesMiembros.forEach(a => { debt[a] = {}; });
+  const add = (deudor, acreedor, m) => { if (!deudor || !acreedor || deudor === acreedor || !(m > 0)) return; if (!debt[deudor]) debt[deudor] = {}; debt[deudor][acreedor] = (debt[deudor][acreedor] || 0) + m; };
+  gastos.forEach(e => {
+    if (e.compartido === 'Cotizacion') return;
+    const a = parseFloat(e.costo) || 0; if (a <= 0) return;
+    const q = e.quien_paga; if (!sesMiembros.includes(q)) return;
+    if (e.compartido === 'Compartido') {
+      const parts = sesParticipantesEf(e); const n = parts.length || 1; const share = a / n;
+      parts.forEach(p => { if (p !== q) add(p, q, share); });
+    } else if (e.compartido === 'Prestamo' || e.compartido === 'Devolucion') {
+      const parts = sesParticipantesEf(e); const n = parts.length || 1; const share = a / n;
+      parts.forEach(p => add(p, q, share));
+    }
+  });
+  return debt;
+}
+function sesNetos(gastos) {
+  const debt = sesDeudas(gastos); const net = {}; sesMiembros.forEach(n => net[n] = 0);
+  sesMiembros.forEach(d => { Object.keys(debt[d] || {}).forEach(c => { const m = debt[d][c]; net[d] -= m; if (net[c] === undefined) net[c] = 0; net[c] += m; }); });
+  return net;
+}
+function sesSimplificar(gastos) {
+  const net = sesNetos(gastos);
+  const deudores = [], acreedores = [];
+  Object.keys(net).forEach(n => { const v = Math.round(net[n]); if (v < -0.5) deudores.push({ n, v }); else if (v > 0.5) acreedores.push({ n, v }); });
+  deudores.sort((a, b) => a.v - b.v); acreedores.sort((a, b) => b.v - a.v);
+  const pagos = []; let i = 0, j = 0;
+  while (i < deudores.length && j < acreedores.length) {
+    const pay = Math.min(-deudores[i].v, acreedores[j].v);
+    if (pay > 0.5) pagos.push({ de: deudores[i].n, a: acreedores[j].n, monto: Math.round(pay) });
+    deudores[i].v += pay; acreedores[j].v -= pay;
+    if (Math.abs(deudores[i].v) < 0.5) i++;
+    if (Math.abs(acreedores[j].v) < 0.5) j++;
+  }
+  return pagos;
+}
+function sesRenderVeredicto(gastos) {
+  const host = document.getElementById('sesVeredicto'); if (!host) return;
+  if (!sesActiva || sesMiembros.length < 2) { host.classList.add('hidden'); return; }
+  host.classList.remove('hidden');
+  const pagos = sesSimplificar(gastos);
+  host.innerHTML = '⚖️ ' + (pagos.length
+    ? pagos.map(p => '<strong>' + escapeHtml(p.de) + '</strong> le debe a <strong>' + escapeHtml(p.a) + '</strong> <strong style="color:var(--green)">' + money(p.monto) + '</strong>').join(' · ')
+    : '<strong>✅ ¡Al día!</strong> Sin deudas en esta sesión.');
 }
 
 // ============================================================================
