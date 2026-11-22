@@ -12,7 +12,7 @@
   --bg:#f2f2f7; --card:#ffffff; --card2:#f9f9fb;
   --border:rgba(60,60,67,.13); --border2:rgba(60,60,67,.22);
   --ink:#1c1c1e; --ink2:#6e6e73; --ink3:#aeaeb2;
-  --accent:#0a84ff; --accent-bg:rgba(10,132,255,.1);
+  --accent:#b76e79; --accent-bg:rgba(183,110,121,.1);
   --green:#34c759; --red:#ff3b30; --orange:#ff9500; --purple:#af52de;
   --radius:16px; --radius-sm:11px;
   --sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;
@@ -22,7 +22,7 @@
     --bg:#000000; --card:#1c1c1e; --card2:#2c2c2e;
     --border:rgba(255,255,255,.14); --border2:rgba(255,255,255,.24);
     --ink:#f2f2f7; --ink2:#98989d; --ink3:#636366;
-    --accent:#0a84ff; --accent-bg:rgba(10,132,255,.18);
+    --accent:#d49aa3; --accent-bg:rgba(212,154,163,.18);
   }
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -128,6 +128,36 @@ a{color:var(--accent)}
   border:none;cursor:pointer;box-shadow:0 4px 12px rgba(10,132,255,.4);z-index:15}
 .fab:active{transform:scale(.92)}
 .linkify a{color:var(--accent);word-break:break-all}
+
+/* ---- Finanzas personales (vault de Gastos) ---- */
+.fin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px}
+.fin-stat{border-radius:var(--radius-sm);padding:11px;background:var(--card2)}
+.fin-stat.pos{background:rgba(52,199,89,.1);color:var(--green)}
+.fin-stat.neg{background:rgba(255,59,48,.1);color:var(--red)}
+.fin-stat .fs-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.75;margin-bottom:3px}
+.fin-stat .fs-val{font-size:16px;font-weight:700}
+.fin-stat .fs-sub{font-size:10px;opacity:.7;margin-top:2px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap;background:var(--card2);color:var(--ink2)}
+.tbtn{flex:1;padding:9px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--card2);color:var(--ink2);font-size:13px;cursor:pointer;text-align:center}
+.tbtn.sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fin-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:9px;background:var(--card)}
+.fin-card.ok{border-color:rgba(52,199,89,.35);background:rgba(52,199,89,.06)}
+.fin-card.warn{border-color:rgba(255,59,48,.35);background:rgba(255,59,48,.06)}
+.fin-row-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fin-mini-btn{background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:5px 10px;font-size:11.5px;color:var(--ink2);cursor:pointer}
+.fin-mini-btn.danger{color:var(--red);border-color:rgba(255,59,48,.3)}
+.fin-photo{width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:zoom-in;flex-shrink:0}
+.fin-progress{height:5px;background:var(--card2);border-radius:3px;overflow:hidden;margin-top:4px}
+.fin-progress>div{height:100%}
+.fin-details summary{cursor:pointer;font-size:11.5px;color:var(--ink2);font-weight:600;padding:3px 0}
+.pf-field{margin-bottom:10px}
+.pf-field label{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;font-weight:500}
+.pf-field input,.pf-field select,.pf-field textarea{width:100%;padding:10px 11px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink);font-size:14.5px;outline:none}
+.pf-field input:focus,.pf-field select:focus,.pf-field textarea:focus{border-color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;z-index:400;max-width:85vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:410;display:flex;align-items:center;justify-content:center;padding:20px}
+.lightbox-overlay img{max-width:100%;max-height:100%;border-radius:8px}
 </style>
 </head>
 <body>
@@ -182,9 +212,31 @@ a{color:var(--accent)}
   <!-- ---- GASTOS ---- -->
   <div class="view" id="view-gastos">
     <div class="card" id="resumenGastos"></div>
+    <button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:12px" onclick="finOpen()">💳 Finanzas personales (vault)</button>
     <div class="section-title">Movimientos</div>
     <div class="card" id="listaGastos"><div class="loading">Cargando…</div></div>
     <button class="fab" onclick="abrirModalGasto()">+</button>
+  </div>
+
+  <!-- ---- FINANZAS PERSONALES (vault de Gastos — transplante real) ---- -->
+  <div class="view" id="view-finanzas">
+    <div id="finGateBox" class="card hidden">
+      <div class="modal-title" id="finGateTitle" style="font-size:16px">Tu contraseña personal</div>
+      <p id="finGateHint" style="color:var(--ink2);font-size:13px;margin-bottom:10px"></p>
+      <input type="password" id="finGateInput" placeholder="Contraseña personal" style="width:100%;padding:11px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink);margin-bottom:10px" onkeydown="if(event.key==='Enter')finGateSubmit()">
+      <button class="btn" onclick="finGateSubmit()">Entrar</button>
+      <p id="finGateStatus" style="color:var(--red);font-size:12px;margin-top:8px"></p>
+    </div>
+    <div id="finBody" class="hidden">
+      <div class="pill-group" id="finTabs" style="margin-bottom:14px">
+        <span class="pill on" data-sec="resumen" onclick="finSetSection('resumen')">📊 Resumen</span>
+        <span class="pill" data-sec="tarjetas" onclick="finSetSection('tarjetas')">💳 Tarjetas</span>
+        <span class="pill" data-sec="fijos" onclick="finSetSection('fijos')">🔁 Fijos</span>
+        <span class="pill" data-sec="deudas" onclick="finSetSection('deudas')">🤝 Deudas</span>
+        <span class="pill" data-sec="movs" onclick="finSetSection('movs')">📈 Ingresos</span>
+      </div>
+      <div id="finContent"></div>
+    </div>
   </div>
 
   <!-- ---- INVENTARIO ---- -->
@@ -372,6 +424,23 @@ a{color:var(--accent)}
   </div>
 </div>
 
+<!-- ============ MODAL: ítem de Finanzas (tarjeta/fijo/deuda/ingreso/msi/inversión) ============ -->
+<div id="modalFinItem" class="modal-overlay hidden" onclick="if(event.target===this) finCloseForm()">
+  <div class="modal-sheet">
+    <div class="modal-title" id="finFormTitle">Nuevo</div>
+    <div id="finFormFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="finCloseForm()">Cancelar</button>
+      <button class="btn" id="finFormSaveBtn" onclick="finFormSave()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Lightbox simple (foto de tarjeta/deuda) ============ -->
+<div id="lightboxOverlay" class="lightbox-overlay hidden" onclick="cerrarLightbox()">
+  <img id="lightboxImg" src="">
+</div>
+
 <script>
 'use strict';
 
@@ -384,7 +453,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Primera piedra';
+const VERSION_APP = 'Segunda piedra — vault de Finanzas';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -565,7 +634,7 @@ function irAVista(nombre) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + nombre).classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === nombre));
-  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', config: 'Configuración' };
+  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', finanzas: 'Finanzas', config: 'Configuración' };
   document.getElementById('topbarTitle').textContent = titulos[nombre] || nombre;
 }
 function abrirConfig() { irAVista('config'); }
@@ -973,6 +1042,731 @@ function exportarRespaldo() {
   const a = document.createElement('a');
   a.href = url; a.download = 'centro-respaldo-' + hoyISO() + '.json';
   a.click();
+}
+
+// ============================================================================
+// FINANZAS PERSONALES — vault de Gastos, transplante real del sistema pItems
+// de Compras_v46.html (personalAuth/personalList/personalSave/personalDelete/
+// vaultAuth/uploadTarjetaFoto ya viven tal cual en Gastos.js). Sin conversión
+// multi-moneda de viaje (eso es cosa de Itinerario) y sin Estados de
+// cuenta/OCR todavía — eso es la siguiente pieza, ligada a Tarjetas.
+// ============================================================================
+let finOwner = '', finPass = '', finVaultPass = '', finItems = [], finLoaded = false;
+let finSection = 'resumen', finFijoFiltro = 'pendientes', finTarjFiltroTipo = '', finTarjMSIView = false;
+let finFormTipo = '', finFormId = '';
+let finTarjFoto = { b64: '', mime: '' }, finTarjFotoUrl = '';
+let finDeudaFoto = { b64: '', mime: '' }, finDeudaFotoUrl = '';
+
+const FIN_TIPOS = {
+  ingreso: { emoji: '📈', label: 'Ingreso' },
+  deuda: { emoji: '🤝', label: 'Deuda externa' },
+  fijo: { emoji: '🔁', label: 'Pago fijo' },
+  tarjeta: { emoji: '💳', label: 'Tarjeta' },
+  msi: { emoji: '🗓️', label: 'Compra a MSI' },
+  inversion: { emoji: '💼', label: 'Inversión' }
+};
+
+function finF(id) { return document.getElementById(id); }
+function finFval(id) { const el = finF(id); return el ? el.value : ''; }
+
+let _toastT;
+function showToast(msg) {
+  const ex = document.querySelector('.toast'); if (ex) ex.remove();
+  clearTimeout(_toastT);
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  _toastT = setTimeout(() => t.remove(), 2800);
+}
+function abrirLightbox(src) { if (!src) return; finF('lightboxImg').src = src; finF('lightboxOverlay').classList.remove('hidden'); }
+function cerrarLightbox() { finF('lightboxOverlay').classList.add('hidden'); }
+
+function finOpen() {
+  irAVista('finanzas');
+  finOwner = usuarioActual.Nombre;
+  finPass = localStorage.getItem('centro_fin_pass_' + finOwner) || '';
+  if (finPass && finLoaded && finItems.length) { finF('finGateBox').classList.add('hidden'); finF('finBody').classList.remove('hidden'); finRender(); return; }
+  if (finPass) { finAuthAndLoad(); } else { finShowGate(false); }
+}
+function finShowGate(esNueva) {
+  finF('finGateBox').classList.remove('hidden');
+  finF('finBody').classList.add('hidden');
+  finF('finGateTitle').textContent = esNueva ? 'Crea tu contraseña personal' : 'Tu contraseña personal';
+  finF('finGateHint').textContent = esNueva
+    ? 'Es la primera vez para "' + finOwner + '". Elige una contraseña SOLO tuya — se guarda en este dispositivo para no volver a pedirla.'
+    : 'Escribe tu contraseña personal de "' + finOwner + '". Es privada, nadie más la conoce.';
+  finF('finGateInput').value = '';
+  finF('finGateStatus').textContent = '';
+}
+async function finGateSubmit() {
+  const pass = finF('finGateInput').value;
+  if (!pass) { finF('finGateStatus').textContent = 'Escribe una contraseña'; return; }
+  finF('finGateStatus').textContent = 'Verificando…';
+  const r = await apiCall('personalAuth', { owner: finOwner, pass });
+  if (r.ok) {
+    finPass = pass; localStorage.setItem('centro_fin_pass_' + finOwner, pass);
+    finF('finGateBox').classList.add('hidden'); finF('finBody').classList.remove('hidden');
+    await finLoad(); finRender();
+  } else if (r.error === 'PASSWORD') { finF('finGateStatus').textContent = '⚠ Contraseña incorrecta'; }
+  else { finF('finGateStatus').textContent = '⚠ ' + (r.error || 'Error'); }
+}
+async function finAuthAndLoad() {
+  const r = await apiCall('personalAuth', { owner: finOwner, pass: finPass });
+  if (r.ok) { finF('finGateBox').classList.add('hidden'); finF('finBody').classList.remove('hidden'); await finLoad(); finRender(); }
+  else { localStorage.removeItem('centro_fin_pass_' + finOwner); finPass = ''; finShowGate(false); }
+}
+async function finLoad() {
+  const r = await apiCall('personalList', { owner: finOwner, pass: finPass });
+  if (r && r.ok && Array.isArray(r.items)) { finItems = r.items; finLoaded = true; }
+}
+function finItemsOf(tipo) { return finItems.filter(i => i.tipo === tipo); }
+
+function finSetSection(sec) {
+  finSection = sec;
+  document.querySelectorAll('#finTabs .pill').forEach(p => p.classList.toggle('on', p.dataset.sec === sec));
+  finRender();
+}
+function finRender() {
+  const el = finF('finContent');
+  if (finSection === 'resumen') el.innerHTML = finRenderResumen();
+  else if (finSection === 'tarjetas') el.innerHTML = finRenderTarjetas();
+  else if (finSection === 'fijos') el.innerHTML = finRenderFijos();
+  else if (finSection === 'deudas') el.innerHTML = finRenderDeudas();
+  else if (finSection === 'movs') el.innerHTML = finRenderMovs();
+}
+
+// ---- fecha / helpers ----
+function finMesKey() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function finDiasPara(diaLimite) {
+  if (!diaLimite) return null;
+  const hoy = new Date(); const d = parseInt(diaLimite);
+  let obj = new Date(hoy.getFullYear(), hoy.getMonth(), d);
+  if (obj < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) obj = new Date(hoy.getFullYear(), hoy.getMonth() + 1, d);
+  return Math.round((obj - new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) / 86400000);
+}
+function finProximaFecha(dia) {
+  if (!dia) return '';
+  const hoy = new Date(); const d = parseInt(dia);
+  let obj = new Date(hoy.getFullYear(), hoy.getMonth(), d);
+  if (obj < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) obj = new Date(hoy.getFullYear(), hoy.getMonth() + 1, d);
+  return obj.toISOString().slice(0, 10);
+}
+function finFmtDate(iso) { if (!iso) return '—'; try { return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return iso; } }
+
+// ---- tarjetas: helpers ----
+function finCardTipoEmoji(c) { const t = c.ctipo || 'TDC'; return t === 'PUNTOS' ? '🎫' : (t === 'TDD' ? '🏦' : '💳'); }
+function finCardLabel(c) {
+  const tipo = c.ctipo || 'TDC';
+  const tf = c.termFisica, tv = c.termVirtual;
+  let term = '';
+  if (tf && tv) term = ' ····' + tf + ' / ····' + tv;
+  else if (tf) term = ' ····' + tf;
+  else if (tv) term = ' ····' + tv;
+  const tit = c.titular ? (' (' + c.titular + ')') : '';
+  const red = c.red ? (' ' + c.red) : '';
+  return (c.banco || c.nombre || '') + red + ' ' + tipo + term + tit;
+}
+function finCardOptions(sel) {
+  return '<option value="">— sin tarjeta —</option>' + finItemsOf('tarjeta').map(c =>
+    '<option value="' + escapeHtml(c.id) + '"' + (sel === c.id ? ' selected' : '') + '>' + escapeHtml(finCardLabel(c)) + '</option>').join('');
+}
+function finCardById(id) { return finItemsOf('tarjeta').find(c => c.id === id); }
+function finTarjetaCargado(cardId, mk) {
+  mk = mk || finMesKey();
+  let tot = 0;
+  finItemsOf('fijo').forEach(f => { if (f.tarjeta === cardId) tot += parseFloat(f.monto) || 0; });
+  finItemsOf('msi').forEach(m => { if (m.tarjeta !== cardId) return; const cuota = finMSICuotas(m).find(q => q.key === mk); if (cuota) tot += cuota.monto; });
+  return tot;
+}
+
+// ---- MSI (meses sin intereses) ----
+function finMSICuotaMonto(m) { const meses = parseInt(m.meses) || 1; return (parseFloat(m.monto) || 0) / meses; }
+function finMSICuotas(m) {
+  const meses = parseInt(m.meses) || 1, cuota = finMSICuotaMonto(m);
+  const compra = m.inicio ? new Date(m.inicio + 'T12:00:00') : new Date();
+  const card = finCardById(m.tarjeta);
+  const corte = card ? (parseInt(card.diaCorte) || 0) : 0;
+  let primerCobro;
+  if (corte) {
+    primerCobro = new Date(compra.getFullYear(), compra.getMonth(), Math.min(corte, new Date(compra.getFullYear(), compra.getMonth() + 1, 0).getDate()));
+    if (primerCobro < compra) primerCobro = new Date(compra.getFullYear(), compra.getMonth() + 1, corte);
+  } else primerCobro = compra;
+  const pagadas = m.pagadas || {};
+  const arr = [];
+  for (let k = 0; k < meses; k++) {
+    const dt = new Date(primerCobro.getFullYear(), primerCobro.getMonth() + k, primerCobro.getDate());
+    const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    arr.push({ idx: k + 1, key, fecha: dt.toISOString().slice(0, 10), monto: cuota, pagada: !!pagadas[key] });
+  }
+  return arr;
+}
+function finMSIPendiente(m) { return finMSICuotas(m).filter(q => !q.pagada).reduce((s, q) => s + q.monto, 0); }
+async function finToggleMSICuota(id, key) {
+  const m = finItems.find(x => x.id === id); if (!m) return;
+  m.pagadas = m.pagadas || {}; m.pagadas[key] = !m.pagadas[key];
+  await finSaveItem(m);
+}
+function finDeudaResta(d) {
+  const total = parseFloat(d.monto) || 0;
+  const pagado = Object.values(d.pagos || {}).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  return Math.max(0, total - pagado);
+}
+
+// ---- guardar / borrar (personalSave/personalDelete de Gastos.js) ----
+async function finSaveItem(item) {
+  const hoy = hoyISO();
+  if (!item.fecha_captura) item.fecha_captura = hoy;
+  item.fecha_actualizacion = hoy;
+  const r = await apiCall('personalSave', { owner: finOwner, pass: finPass, item });
+  if (r && r.ok) {
+    if (!item.id) item.id = r.id;
+    const i = finItems.findIndex(x => x.id === item.id);
+    if (i > -1) finItems[i] = item; else finItems.push(item);
+    finRender();
+    return true;
+  }
+  showToast('⚠ No se guardó: ' + ((r && r.error) || 'error'));
+  return false;
+}
+function finDelItem(id) {
+  pedirConfirmacion('Eliminar', '¿Eliminar este registro personal? No se puede deshacer.', async () => {
+    const r = await apiCall('personalDelete', { owner: finOwner, pass: finPass, id });
+    if (r && r.ok) { finItems = finItems.filter(x => x.id !== id); finRender(); }
+    else showToast('⚠ ' + ((r && r.error) || 'error'));
+  });
+}
+
+// ---- RESUMEN ----
+function finRenderResumen() {
+  const ingresos = finItemsOf('ingreso').reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
+  const fijosMes = finItemsOf('fijo').reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
+  const msiMes = finItemsOf('msi').reduce((s, m) => s + finMSICuotaMonto(m), 0);
+  let meDeben = 0, debo = 0;
+  finItemsOf('deuda').forEach(d => { const r = finDeudaResta(d); if (d.dir === 'medeben') meDeben += r; else debo += r; });
+  const msiPendienteTotal = finItemsOf('msi').reduce((s, m) => s + finMSIPendiente(m), 0);
+  debo += msiPendienteTotal;
+  const inversiones = finItemsOf('inversion');
+
+  const stat = (cls, label, val, sub) => `<div class="fin-stat ${cls}"><div class="fs-label">${label}</div><div class="fs-val">${val}</div>${sub ? '<div class="fs-sub">' + sub + '</div>' : ''}</div>`;
+  let html = `<div class="fin-stats">
+    ${stat('pos', '💰 Me deben', money(meDeben), '')}
+    ${stat('neg', '⚠️ Debo', money(debo), msiPendienteTotal ? ('incl. MSI ' + money(msiPendienteTotal)) : '')}
+    ${stat('', '📈 Ingresos', money(ingresos), '')}
+    ${stat('', '🔁 Fijos + MSI este mes', money(fijosMes + msiMes), '')}
+  </div>`;
+  if (inversiones.length) {
+    html += `<div class="section-title">💼 Inversiones</div><div class="card">` +
+      inversiones.map(i => `<div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(i.nombre || '—')}</span><span class="lr-sub">${i.institucion ? escapeHtml(i.institucion) : ''}</span></div><span class="lr-val">${money(i.valorActual)}</span></div>`).join('') +
+      `</div>`;
+  }
+  html += `<button class="btn btn-sec btn-sm" style="width:100%;margin:4px 0 14px" onclick="finOpenForm('inversion','')">＋ Nueva inversión</button>`;
+  const mk = finMesKey();
+  const fijosPend = finItemsOf('fijo').filter(f => !f.cancelado && !(f.pagos || {})[mk]).length;
+  html += `<div class="section-title">🔔 Pendientes</div><div class="card">
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Pagos fijos pendientes este mes</span></div><span class="lr-val">${fijosPend}</span></div>
+  </div>`;
+  return html;
+}
+
+// ---- TARJETAS ----
+function finSetTarjFiltroTipo(t) { finTarjFiltroTipo = (finTarjFiltroTipo === t) ? '' : t; finRender(); }
+function finToggleTarjMSIView() { finTarjMSIView = !finTarjMSIView; finRender(); }
+function finToggleCardCollapse(id) { const el = finF(id); if (el) el.style.display = (el.style.display === 'block') ? 'none' : 'block'; }
+function finRenderTarjetasMSISolo() {
+  const msiActivas = finItemsOf('msi').filter(m => finMSIPendiente(m) > 0);
+  const msiTerminadas = finItemsOf('msi').filter(m => finMSIPendiente(m) <= 0);
+  const row = m => {
+    const cuotas = finMSICuotas(m), pagadasN = cuotas.filter(q => q.pagada).length, pendiente = finMSIPendiente(m);
+    const card = finCardById(m.tarjeta);
+    const cuotasHtml = cuotas.map(q => `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;${q.pagada ? 'color:var(--ink3)' : ''}">
+        <button class="fin-mini-btn" style="padding:1px 7px;${q.pagada ? 'color:var(--green)' : ''}" onclick="finToggleMSICuota('${escapeHtml(m.id)}','${q.key}')">${q.pagada ? '✓' : q.idx}</button>
+        <span>Pago ${q.idx}: ${finFmtDate(q.fecha)}</span><span style="margin-left:auto">${money(q.monto)}</span>
+      </div>`).join('');
+    return `<div class="fin-card">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">🗓️ ${escapeHtml(m.concepto || '—')}</div>
+          <div class="lr-sub">${card ? escapeHtml(finCardLabel(card)) + ' · ' : ''}${money(finMSICuotaMonto(m))}/mes · ${pagadasN}/${m.meses} pagadas</div>
+          <div style="font-size:11px;font-weight:600;color:${pendiente ? 'var(--red)' : 'var(--green)'}">${pendiente ? 'Pendiente: ' + money(pendiente) : '✓ Liquidado'}</div>
+        </div>
+        <button class="fin-mini-btn" onclick="finOpenForm('msi','${escapeHtml(m.id)}')">✏️</button>
+        <button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(m.id)}')">🗑</button>
+      </div>
+      <details class="fin-details" style="margin-top:6px"><summary>Ver calendario de pagos</summary><div style="margin-top:4px">${cuotasHtml}</div></details>
+    </div>`;
+  };
+  const terminadasHtml = msiTerminadas.length ? `<details class="fin-details"><summary>✅ Pagos terminados (${msiTerminadas.length})</summary>${msiTerminadas.map(row).join('')}</details>` : '';
+  return `<div class="fin-row-actions" style="margin-bottom:10px">
+      <button class="btn btn-sec btn-sm" onclick="finToggleTarjMSIView()">← Volver a tarjetas</button>
+      <button class="btn btn-sec btn-sm" onclick="finOpenForm('msi','')">＋ Compra a MSI</button>
+    </div>${msiActivas.map(row).join('') || '<div class="empty-state">No tienes compras a MSI activas.</div>'}${terminadasHtml}`;
+}
+function finRenderTarjetas() {
+  if (finTarjMSIView) return finRenderTarjetasMSISolo();
+  const mk = finMesKey();
+  let items = finItemsOf('tarjeta');
+  if (finTarjFiltroTipo) items = items.filter(c => (c.ctipo || 'TDC') === finTarjFiltroTipo);
+  items = items.slice().sort((a, b) => { const da = finDiasPara(a.diaLimite), db = finDiasPara(b.diaLimite); return (da === null ? 99999 : da) - (db === null ? 99999 : db); });
+  const rows = items.map(c => {
+    const proxVenc = c.diaLimite ? finProximaFecha(c.diaLimite) : '';
+    const dias = finDiasPara(c.diaLimite);
+    const cargado = finTarjetaCargado(c.id, mk);
+    let creditoHtml = '';
+    if (c.ctipo === 'TDC' && parseFloat(c.creditoMax) > 0) {
+      const max = parseFloat(c.creditoMax) || 0, usado = cargado, disp = Math.max(max - usado, 0), pct = Math.min(100, Math.round((usado / max) * 100));
+      creditoHtml = `<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink2)"><span>Disponible (estimado): <strong>${money(disp, c.moneda)}</strong> de ${money(max, c.moneda)}</span><span>${pct}%</span></div>
+        <div class="fin-progress"><div style="width:${pct}%;background:${pct > 80 ? 'var(--red)' : 'var(--green)'}"></div></div></div>`;
+    }
+    const feeParts = [];
+    if (c.interesAnual) feeParts.push('Interés ' + escapeHtml(c.interesAnual) + '%/año');
+    if (c.comisionTardio) feeParts.push('Pago tardío ' + money(c.comisionTardio));
+    if (c.comisionInactividad) feeParts.push('Inactividad ' + money(c.comisionInactividad));
+    const feesHtml = feeParts.length ? `<div style="font-size:10.5px;color:var(--red);margin-top:6px">⚠️ ${feeParts.join(' · ')}</div>` : '';
+    const cardBodyId = 'finCardBody_' + c.id;
+    const fotoBtn = c.fotoUrl ? `<img class="fin-photo" src="${escapeHtml(c.fotoUrl)}" onclick="abrirLightbox('${escapeHtml(c.fotoUrl)}')">` : '';
+    return `<div class="fin-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        ${fotoBtn}
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="finToggleCardCollapse('${cardBodyId}')">
+          <div style="font-weight:700;font-size:14px">${finCardTipoEmoji(c)} ${escapeHtml(finCardLabel(c))}</div>
+          <div class="lr-sub">Corte: ${escapeHtml(c.diaCorte || '—')} · Vence: ${proxVenc ? finFmtDate(proxVenc) + (dias !== null ? ' (' + dias + 'd)' : '') : '—'} · Cargado: ${money(cargado, c.moneda)}</div>
+        </div>
+        <button class="fin-mini-btn" onclick="finOpenForm('tarjeta','${escapeHtml(c.id)}')">✏️</button>
+        <button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(c.id)}')">🗑</button>
+      </div>
+      <div id="${cardBodyId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+        ${creditoHtml}${feesHtml}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state">Sin tarjetas. Agrega tus TDC/TDD/puntos.</div>';
+  const tipoBtn = (t, l) => `<span class="pill${finTarjFiltroTipo === t ? ' on' : ''}" onclick="finSetTarjFiltroTipo('${t}')">${l}</span>`;
+  return `<div class="pill-group" style="margin-bottom:12px">
+      ${tipoBtn('TDC', '💳 TDC')}${tipoBtn('TDD', '🏦 TDD')}${tipoBtn('PUNTOS', '🎫 Puntos')}
+      <span class="pill" onclick="finToggleTarjMSIView()">🗓️ Compras a MSI</span>
+    </div>
+    <button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:10px" onclick="finOpenForm('tarjeta','')">＋ Nueva tarjeta</button>
+    ${rows}`;
+}
+
+// ---- PAGOS FIJOS ----
+function finFijoPagoInfo(f, mk) {
+  mk = mk || finMesKey();
+  const p = (f.pagos || {})[mk];
+  if (p) return { pagado: true, fecha: (p && typeof p === 'object') ? p.fecha : '', monto: (p && typeof p === 'object') ? (parseFloat(p.monto) || 0) : (parseFloat(f.monto) || 0) };
+  return { pagado: false, fecha: '', monto: 0 };
+}
+function finFijoMontoEstimado(f) {
+  const base = parseFloat(f.monto) || 0; if (base) return base;
+  const periodos = Object.keys(f.pagos || {}).sort().reverse();
+  for (const k of periodos) { const p = f.pagos[k]; const m = (p && typeof p === 'object') ? (parseFloat(p.monto) || 0) : 0; if (m) return m; }
+  return 0;
+}
+function finSetFijoFiltro(f) { finFijoFiltro = f; finRender(); }
+function finFijoPasaFiltro(f, mk) {
+  if (finFijoFiltro === 'cancelados') return !!f.cancelado;
+  if (f.cancelado) return false;
+  const pagado = finFijoPagoInfo(f, mk).pagado, dias = finDiasPara(f.diaLimite);
+  switch (finFijoFiltro) {
+    case 'pendientes': return !pagado;
+    case 'pagados': return !!pagado;
+    case 'vencidos': return !pagado && dias !== null && dias < 0;
+    case 'tarjetas': return f.tipoPago === 'tarjeta';
+    default: return true;
+  }
+}
+function finRenderHistorialMensual() {
+  const months = new Set([finMesKey()]);
+  finItemsOf('fijo').forEach(f => Object.keys(f.pagos || {}).forEach(k => months.add(k.slice(0, 7))));
+  const list = [...months].sort().reverse().slice(0, 12);
+  return list.map(mk => {
+    const filas = finItemsOf('fijo').filter(f => !f.cancelado).map(f => {
+      const p = (f.pagos || {})[mk], pagado = !!p;
+      const monto = pagado ? ((p && typeof p === 'object') ? (parseFloat(p.monto) || 0) : (parseFloat(f.monto) || 0)) : 0;
+      return `<div style="padding:3px 0;font-size:12px">${escapeHtml(f.concepto || 'Pago fijo')}: ${pagado ? '<span style="color:var(--green);font-weight:600">✓ pagado ' + money(monto) + '</span>' : '<span style="color:var(--ink3)">pendiente</span>'}</div>`;
+    }).join('');
+    return `<div class="fin-card"><div style="font-weight:700;margin-bottom:6px">${mk}</div>${filas || '<div class="empty-state">Sin pagos fijos</div>'}</div>`;
+  }).join('');
+}
+async function finToggleFijoPagado(id) {
+  const f = finItems.find(x => x.id === id); if (!f) return;
+  const mk = finMesKey(); f.pagos = f.pagos || {};
+  if (f.pagos[mk]) { delete f.pagos[mk]; await finSaveItem(f); return; }
+  const hoy = hoyISO();
+  const fecha = prompt('Fecha de pago de "' + (f.concepto || 'este pago') + '" (' + mk + '):', f.fechaPago || hoy);
+  if (fecha === null) return;
+  let monto = parseFloat(f.monto) || 0;
+  if (!monto) {
+    const ref = finFijoMontoEstimado(f);
+    const txt = prompt('¿Cuánto pagaste de "' + (f.concepto || 'este pago') + '"?', ref ? String(ref) : '');
+    if (txt === null) return;
+    monto = parseFloat(txt) || 0;
+  }
+  f.pagos[mk] = { monto, fecha: (fecha || hoy).trim() };
+  await finSaveItem(f);
+}
+async function finCancelarFijo(id) {
+  const f = finItems.find(x => x.id === id); if (!f) return;
+  pedirConfirmacion('Cancelar', '¿Cancelar "' + (f.concepto || 'este pago fijo') + '"? Su historial de pagos se conserva.', async () => { f.cancelado = true; await finSaveItem(f); });
+}
+async function finReactivarFijo(id) { const f = finItems.find(x => x.id === id); if (!f) return; f.cancelado = false; await finSaveItem(f); }
+async function finAccionFijo(id) {
+  const f = finItems.find(x => x.id === id); if (!f) return;
+  if (f.tipoPago === 'tarjeta') { showToast('Este pago se revisa desde Estados de cuenta (próximamente)'); return; }
+  const mk = finMesKey();
+  const periodoDef = (f.pagos || {})[mk] ? mk + '-2' : mk;
+  const periodo = prompt('Periodo a registrar (ej. ' + mk + '):', periodoDef);
+  if (periodo === null || !periodo.trim()) return;
+  const hoy = hoyISO();
+  const fecha = prompt('Fecha de pago:', hoy); if (fecha === null) return;
+  const txt = prompt('Monto pagado:', f.monto || ''); if (txt === null) return;
+  f.pagos = f.pagos || {};
+  let p = periodo.trim();
+  if (f.pagos[p]) { let i = 2, alt = p + '-' + i; while (f.pagos[alt]) { i++; alt = p + '-' + i; } p = alt; }
+  f.pagos[p] = { monto: parseFloat(txt) || 0, fecha: (fecha || hoy).trim() };
+  await finSaveItem(f);
+}
+function finRenderFijos() {
+  const mk = finMesKey();
+  const top = `<div class="fin-row-actions" style="margin-bottom:10px">
+    <button class="btn btn-sec btn-sm" onclick="finOpenForm('fijo','')">＋ Nuevo pago fijo</button>
+    <button class="btn btn-sec btn-sm" onclick="finSetFijoFiltro('historial')">📅 Historial por mes</button>
+  </div>`;
+  const filtros = [['todos', 'Todos'], ['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['vencidos', 'Vencidos'], ['tarjetas', 'Tarjetas'], ['cancelados', '🚫 Cancelados']];
+  const chips = `<div class="pill-group" style="margin-bottom:10px">${filtros.map(([k, l]) => `<span class="pill${finFijoFiltro === k ? ' on' : ''}" onclick="finSetFijoFiltro('${k}')">${l}</span>`).join('')}</div>`;
+  if (finFijoFiltro === 'historial') return `${top}${chips}${finRenderHistorialMensual()}`;
+  const items = finItemsOf('fijo').filter(f => finFijoPasaFiltro(f, mk))
+    .sort((a, b) => { const da = finDiasPara(a.diaLimite), db = finDiasPara(b.diaLimite); return (da === null ? 99999 : da) - (db === null ? 99999 : db); });
+  const rows = items.map(f => {
+    const info = finFijoPagoInfo(f, mk), pagado = info.pagado, dias = finDiasPara(f.diaLimite);
+    const card = finCardById(f.tarjeta);
+    const fpClasif = [card ? ('💳 ' + escapeHtml(finCardLabel(card))) : (f.formaPago === 'Efectivo' ? '💵 Efectivo' : ''), f.categoria ? ('🏷 ' + escapeHtml(f.categoria)) : ''].filter(Boolean).join(' · ');
+    let alarma = '';
+    if (f.cancelado) alarma = '<span style="color:var(--ink3);font-weight:600">🚫 cancelado</span>';
+    else if (!pagado && dias !== null) alarma = dias < 0 ? '<span style="color:var(--red);font-weight:600">🔴 vencido</span>' : (dias <= 5 ? '<span style="color:var(--orange);font-weight:600">🔔 en ' + dias + 'd</span>' : '<span style="color:var(--ink3)">en ' + dias + 'd</span>');
+    const botones = f.cancelado
+      ? `<button class="fin-mini-btn" onclick="finReactivarFijo('${escapeHtml(f.id)}')">↩️ Reactivar</button><button class="fin-mini-btn" onclick="finOpenForm('fijo','${escapeHtml(f.id)}')">✏️</button><button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(f.id)}')">🗑</button>`
+      : (pagado ? `<button class="fin-mini-btn" style="color:var(--green)" onclick="finToggleFijoPagado('${escapeHtml(f.id)}')">✓ Pagado ${info.fecha ? finFmtDate(info.fecha) : 'este mes'} · ${money(info.monto)} (deshacer)</button>` : '')
+        + `<button class="fin-mini-btn" onclick="finAccionFijo('${escapeHtml(f.id)}')">🧾 Registrar pago</button>`
+        + `<button class="fin-mini-btn" onclick="finOpenForm('fijo','${escapeHtml(f.id)}')">✏️</button>`
+        + `<button class="fin-mini-btn" onclick="finCancelarFijo('${escapeHtml(f.id)}')">🚫 Cancelar</button>`
+        + `<button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(f.id)}')">🗑</button>`;
+    return `<div class="fin-card ${pagado ? 'ok' : ''}" style="opacity:${f.cancelado ? '.7' : '1'}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${escapeHtml(f.concepto || '—')} ${alarma}</div>
+          <div class="lr-sub">día límite ${f.diaLimite || '?'}${fpClasif ? (' · ' + fpClasif) : ''}${f.nota ? (' · ' + escapeHtml(f.nota)) : ''}</div></div>
+        <div style="font-weight:700">${(!f.monto && finFijoMontoEstimado(f)) ? '~' : ''}${money(finFijoMontoEstimado(f))}</div>
+      </div>
+      <div class="fin-row-actions">${botones}</div>
+    </div>`;
+  }).join('') || '<div class="empty-state">Sin pagos fijos con este filtro.</div>';
+  return `${top}${chips}${rows}`;
+}
+
+// ---- DEUDAS EXTERNAS ----
+function finRenderDeudas() {
+  let meDeben = 0, debo = 0;
+  finItemsOf('deuda').forEach(d => { const r = finDeudaResta(d); if (d.dir === 'medeben') meDeben += r; else debo += r; });
+  const resumen = (meDeben || debo) ? `<div class="fin-stats" style="margin-bottom:10px">
+      <div class="fin-stat pos"><div class="fs-label">Me deben</div><div class="fs-val">${money(meDeben)}</div></div>
+      <div class="fin-stat neg"><div class="fs-label">Debo</div><div class="fs-val">${money(debo)}</div></div>
+    </div>` : '';
+  const rows = finItemsOf('deuda').map(d => {
+    const resta = finDeudaResta(d), total = parseFloat(d.monto) || 0;
+    const fotoBtn = d.fotoUrl ? `<img class="fin-photo" src="${escapeHtml(d.fotoUrl)}" onclick="abrirLightbox('${escapeHtml(d.fotoUrl)}')">` : '';
+    return `<div class="fin-card">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${fotoBtn}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${d.dir === 'medeben' ? '💰 Me debe' : '⚠️ Le debo a'} ${escapeHtml(d.persona || '—')}</div>
+          <div class="lr-sub">${escapeHtml(d.fecha || '')}${d.fechaPago ? (' · pago acordado ' + finFmtDate(d.fechaPago)) : ''}${d.nota ? (' · ' + escapeHtml(d.nota)) : ''}</div>
+          ${resta < total ? `<div style="font-size:11px;color:var(--ink2)">Original ${money(total)} · resta ${money(resta)}</div>` : ''}
+        </div>
+        <div style="font-weight:700;color:${d.dir === 'medeben' ? 'var(--green)' : 'var(--red)'}">${money(resta)}</div>
+      </div>
+      <div class="fin-row-actions">
+        ${resta > 0 ? `<button class="fin-mini-btn" onclick="finRegistrarPagoDeuda('${escapeHtml(d.id)}')">💵 Registrar pago</button>` : ''}
+        <button class="fin-mini-btn" onclick="finOpenForm('deuda','${escapeHtml(d.id)}')">✏️</button>
+        <button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(d.id)}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state">Sin deudas. Agrega préstamos o pagos pendientes con gente fuera de las sesiones.</div>';
+  return `${resumen}<button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:10px" onclick="finOpenForm('deuda','')">＋ Nueva deuda</button>${rows}`;
+}
+async function finRegistrarPagoDeuda(id) {
+  const d = finItems.find(x => x.id === id); if (!d) return;
+  const resta = finDeudaResta(d);
+  if (resta <= 0) { showToast('Esta deuda ya está saldada'); return; }
+  const txt = prompt('Pago de ' + (d.persona || 'esta deuda') + ' (resta ' + money(resta) + ')', resta);
+  if (txt === null) return;
+  const monto = parseFloat(txt) || 0; if (!monto) return;
+  const hoy = hoyISO();
+  d.pagos = d.pagos || {};
+  let p = hoy;
+  if (d.pagos[p]) { let i = 2, alt = p + '-' + i; while (d.pagos[alt]) { i++; alt = p + '-' + i; } p = alt; }
+  d.pagos[p] = { monto, fecha: hoy };
+  await finSaveItem(d);
+}
+
+// ---- INGRESOS ----
+function finRenderMovs() {
+  const ing = finItemsOf('ingreso');
+  const rows = ing.map(i => `<div class="list-row">
+    <div class="lr-main"><span class="lr-title">${escapeHtml(i.concepto || '—')}</span><span class="lr-sub">${escapeHtml(i.fecha || '')}${i.nota ? (' · ' + escapeHtml(i.nota)) : ''}</span></div>
+    <span class="lr-val pos">+${money(i.monto)}</span>
+    <button class="fin-mini-btn" onclick="finOpenForm('ingreso','${escapeHtml(i.id)}')">✏️</button>
+    <button class="fin-mini-btn danger" onclick="finDelItem('${escapeHtml(i.id)}')">🗑</button>
+  </div>`).join('') || '<div class="empty-state">Sin ingresos registrados.</div>';
+  return `<button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:10px" onclick="finOpenForm('ingreso','')">＋ Ingreso</button>
+    <p style="font-size:12px;color:var(--ink2);margin-bottom:10px">Los egresos se registran como Gasto normal — aquí solo va lo que entra: sueldo, pagos que recibes, etc.</p>
+    <div class="card">${rows}</div>`;
+}
+
+// ---- vault de datos sensibles (CLABE/número/PIN) — contraseña aparte, vaultAuth ----
+async function finVaultEnsure() {
+  if (finVaultPass) { const r = await apiCall('vaultAuth', { owner: finOwner, vpass: finVaultPass }); if (r.ok) return true; finVaultPass = ''; }
+  const cached = sessionStorage.getItem('centro_fin_vault_' + finOwner) || '';
+  if (cached) { const r = await apiCall('vaultAuth', { owner: finOwner, vpass: cached }); if (r.ok) { finVaultPass = cached; return true; } }
+  const pass = prompt('🔒 Contraseña de datos sensibles de ' + finOwner + ' (distinta de tu contraseña personal):');
+  if (pass === null) return false;
+  const r = await apiCall('vaultAuth', { owner: finOwner, vpass: pass });
+  if (r.ok) { finVaultPass = pass; sessionStorage.setItem('centro_fin_vault_' + finOwner, pass); return true; }
+  showToast('⚠ ' + (r.error === 'PASSWORD' ? 'Contraseña incorrecta' : (r.error || 'Error')));
+  return false;
+}
+
+// ---- formulario (crear/editar) ----
+async function finOpenForm(tipo, id) {
+  const item = id ? finItems.find(x => x.id === id) : { tipo };
+  if (tipo === 'tarjeta' && item && (item.clabe || item.numFisica || item.numVirtual || item.pin || item.appPass)) {
+    if (!(await finVaultEnsure())) { showToast('🔒 Necesitas la contraseña de datos sensibles para editar esta tarjeta'); return; }
+  }
+  finFormTipo = tipo; finFormId = id || '';
+  if (tipo === 'tarjeta') { finTarjFoto = { b64: '', mime: '' }; finTarjFotoUrl = (item && item.fotoUrl) || ''; }
+  if (tipo === 'deuda') { finDeudaFoto = { b64: '', mime: '' }; finDeudaFotoUrl = (item && item.fotoUrl) || ''; }
+  finF('finFormTitle').textContent = (id ? 'Editar ' : 'Nuevo ') + (FIN_TIPOS[tipo] ? FIN_TIPOS[tipo].emoji + ' ' + FIN_TIPOS[tipo].label : 'registro');
+  finF('finFormFields').innerHTML = finFormFieldsHTML(tipo, item || { tipo });
+  abrirModal('modalFinItem');
+}
+function finFormTieneDatos() {
+  const cont = finF('finFormFields'); if (!cont) return false;
+  return [...cont.querySelectorAll('input,select,textarea')].some(el => { if (el.type === 'checkbox') return el.checked; if (el.type === 'file') return el.files && el.files.length; return el.value && String(el.value).trim() !== ''; });
+}
+function finCloseForm() { intentarCerrarModal('modalFinItem', finFormTieneDatos()); }
+
+function finFormFieldsHTML(tipo, it) {
+  it = it || {};
+  const F = (label, id, val, attrs) => `<div class="pf-field"><label>${label}</label><input id="${id}" value="${escapeHtml(val || '')}" ${attrs || ''}></div>`;
+  const FCopy = (label, id, val, attrs) => `<div class="pf-field"><label>${label}</label><div style="display:flex;gap:6px"><input id="${id}" value="${escapeHtml(val || '')}" ${attrs || ''} style="flex:1"><button type="button" class="fin-mini-btn" onclick="finCopiarCampo('${id}')">📋</button></div></div>`;
+  const TA = (label, id, val, attrs) => `<div class="pf-field"><label>${label}</label><textarea id="${id}" ${attrs || ''}>${escapeHtml(val || '')}</textarea></div>`;
+  const hoy = hoyISO();
+  if (tipo === 'ingreso') {
+    return F('Concepto', 'pfConcepto', it.concepto, 'placeholder="Ej. Sueldo"')
+      + F('Monto', 'pfMonto', it.monto, 'type="number" placeholder="0"')
+      + F('Fecha', 'pfFecha', it.fecha || hoy, 'type="date"')
+      + F('Nota (opcional)', 'pfNota', it.nota, 'placeholder="Detalle…"');
+  }
+  if (tipo === 'deuda') {
+    const dir = it.dir || 'medeben';
+    return `<div class="pf-field"><label>Dirección</label><div style="display:flex;gap:8px">
+        <button type="button" class="tbtn${dir === 'medeben' ? ' sel' : ''}" id="pdMe" onclick="finDeudaDir('medeben')">💰 Me deben</button>
+        <button type="button" class="tbtn${dir === 'debo' ? ' sel' : ''}" id="pdYo" onclick="finDeudaDir('debo')">⚠️ Yo debo</button>
+      </div><input type="hidden" id="pfDir" value="${dir}"></div>`
+      + F('Persona', 'pfPersona', it.persona, 'placeholder="Nombre"')
+      + F('Monto', 'pfMonto', it.monto, 'type="number" placeholder="0"')
+      + F('Fecha en que prestó/le prestaron', 'pfFecha', it.fecha || hoy, 'type="date"')
+      + F('Fecha de pago acordada (opcional)', 'pfFechaPago', it.fechaPago, 'type="date"')
+      + F('Nota (opcional)', 'pfNota', it.nota, 'placeholder="Detalle…"')
+      + `<div class="pf-field"><label>Foto (opcional — vale, ticket, comprobante…)</label>
+          <input type="file" accept="image/*" id="pfDeudaFotoInput" style="display:none" onchange="finDeudaFotoFile(event)">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <img id="pfDeudaFotoPrev" src="${escapeHtml(it.fotoUrl || '')}" class="fin-photo" style="${it.fotoUrl ? '' : 'display:none;'}" onclick="abrirLightbox(this.src)">
+            <button type="button" class="fin-mini-btn" onclick="document.getElementById('pfDeudaFotoInput').click()">🖼 Elegir foto</button>
+            <button type="button" class="fin-mini-btn danger" id="pfDeudaFotoDel" style="${it.fotoUrl ? '' : 'display:none;'}" onclick="finDeudaFotoClear()">✕ Quitar</button>
+          </div></div>`;
+  }
+  if (tipo === 'fijo') {
+    const fm = it.formaPago || '';
+    return F('Concepto', 'pfConcepto', it.concepto, 'placeholder="Renta, Netflix…"')
+      + `<div class="pf-field"><label>Tipo de pago</label><select id="pfTipoPago">
+          <option value="recurrente"${(it.tipoPago || 'recurrente') === 'recurrente' ? ' selected' : ''}>🔁 Gasto recurrente</option>
+          <option value="tarjeta"${it.tipoPago === 'tarjeta' ? ' selected' : ''}>💳 Recordatorio de tarjeta</option>
+        </select></div>`
+      + F('Monto', 'pfMonto', it.monto, 'type="number" placeholder="0 si es variable"')
+      + F('Día límite de pago (1-31)', 'pfDiaLimite', it.diaLimite, 'type="number" min="1" max="31"')
+      + F('Categoría', 'pfCategoria', it.categoria, 'placeholder="Servicios, suscripciones…"')
+      + `<div class="pf-field"><label>Forma de pago</label><div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="pfFormaPago" onchange="finFormaPagoChange()" style="width:auto">
+            <option value=""${fm === '' ? ' selected' : ''}>—</option>
+            <option value="Efectivo"${fm === 'Efectivo' ? ' selected' : ''}>💵 Efectivo</option>
+            <option value="Tarjeta"${(fm === 'Tarjeta' || it.tarjeta) ? ' selected' : ''}>💳 Tarjeta</option>
+          </select>
+          <select id="pfTarjeta" style="flex:1;min-width:150px;${(fm === 'Tarjeta' || it.tarjeta) ? '' : 'display:none'}">${finCardOptions(it.tarjeta)}</select>
+        </div></div>`
+      + F('Nota (opcional)', 'pfNota', it.nota, 'placeholder="Ej. pagar en el banco lejano"');
+  }
+  if (tipo === 'tarjeta') {
+    const ct = it.ctipo || 'TDC';
+    return F('Alias', 'pfTarjNombre', it.nombre, 'placeholder="Ej. Nu principal"')
+      + F('Titular (de quién es)', 'pfTitular', it.titular || usuarioActual.Nombre, 'placeholder="Ej. Temis…"')
+      + F('Banco', 'pfBanco', it.banco, 'placeholder="Nu, HSBC, Citibanamex…"')
+      + `<div class="pf-field"><label>Tipo</label><div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="tbtn${ct === 'TDC' ? ' sel' : ''}" id="ptC" onclick="finTarjTipo('TDC')">💳 Crédito</button>
+          <button type="button" class="tbtn${ct === 'TDD' ? ' sel' : ''}" id="ptD" onclick="finTarjTipo('TDD')">🏦 Débito</button>
+          <button type="button" class="tbtn${ct === 'PUNTOS' ? ' sel' : ''}" id="ptP" onclick="finTarjTipo('PUNTOS')">🎫 Puntos</button>
+        </div><input type="hidden" id="pfCtipo" value="${ct}"></div>`
+      + `<div class="pf-field"><label>Foto / QR (opcional)</label>
+          <input type="file" accept="image/*" id="pfTarjFotoInput" style="display:none" onchange="finTarjFotoFile(event)">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <img id="pfTarjFotoPrev" src="${escapeHtml(it.fotoUrl || '')}" class="fin-photo" style="${it.fotoUrl ? '' : 'display:none;'}" onclick="abrirLightbox(this.src)">
+            <button type="button" class="fin-mini-btn" onclick="document.getElementById('pfTarjFotoInput').click()">🖼 Elegir foto</button>
+            <button type="button" class="fin-mini-btn danger" id="pfTarjFotoDel" style="${it.fotoUrl ? '' : 'display:none;'}" onclick="finTarjFotoClear()">✕ Quitar</button>
+          </div></div>`
+      + F('Red', 'pfRed', it.red, 'placeholder="Visa, Mastercard…"')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${F('Terminación física', 'pfTermFis', it.termFisica, 'placeholder="1234" maxlength="4"')}
+          ${F('Terminación virtual', 'pfTermVir', it.termVirtual, 'placeholder="5678" maxlength="4"')}
+        </div>`
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${F('Día de corte', 'pfDiaCorte', it.diaCorte, 'type="number" min="1" max="31"')}
+          ${F('Día límite', 'pfDiaLimite', it.diaLimite, 'type="number" min="1" max="31"')}
+        </div>`
+      + (ct === 'TDC' ? F('Crédito máximo (opcional)', 'pfCreditoMax', it.creditoMax, 'type="number" placeholder="0"') : '')
+      + F('Notas', 'pfNotaTarj', it.nota, 'placeholder="Ej. paga en app, banco lejano…"')
+      + `<details class="fin-details"><summary>💰 Intereses y comisiones</summary><div style="margin-top:8px">
+          ${F('Interés anual por no pagar (%)', 'pfInteres', it.interesAnual, 'type="number" step="0.01"')}
+          ${F('Comisión por pago tardío', 'pfComisionTardio', it.comisionTardio, 'type="number"')}
+          ${F('Comisión por inactividad', 'pfComisionInactividad', it.comisionInactividad, 'type="number"')}
+          ${F('Requisito mínimo para evitar comisión', 'pfRequisitoMinimo', it.requisitoMinimo, '')}
+          ${F('Anualidad / membresía (opcional)', 'pfAnualidad', it.anualidad, '')}
+        </div></details>`
+      + `<details class="fin-details"><summary style="color:var(--accent)">🔒 Datos sensibles (CLABE, número, PIN)</summary><div style="margin-top:8px">
+          ${FCopy('CLABE (opcional)', 'pfClabe', it.clabe, 'autocomplete="off"')}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            ${FCopy('Nº completo — física', 'pfNumFis', it.numFisica, 'autocomplete="off"')}
+            ${FCopy('Nº completo — virtual', 'pfNumVir', it.numVirtual, 'autocomplete="off"')}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            ${F('Vencimiento — física (MM/AA)', 'pfVenceFis', it.venceFisica, 'maxlength="5"')}
+            ${F('Vencimiento — virtual (MM/AA)', 'pfVenceVir', it.venceVirtual, 'maxlength="5"')}
+          </div>
+          ${FCopy('PIN (opcional)', 'pfPin', it.pin, 'autocomplete="off"')}
+          ${FCopy('Usuario de la app', 'pfAppUsuario', it.appUsuario, 'autocomplete="off"')}
+          ${FCopy('Contraseña de la app', 'pfAppPass', it.appPass, 'autocomplete="off"')}
+          ${FCopy('Número de cuenta', 'pfAppCuenta', it.appCuenta, 'autocomplete="off"')}
+          ${TA('Notas confidenciales (opcional)', 'pfNotaConfidencial', it.notaConfidencial, 'rows="2"')}
+        </div></details>`;
+  }
+  if (tipo === 'msi') {
+    return F('¿Qué compraste?', 'pfConcepto', it.concepto, 'placeholder="Ej. Laptop"')
+      + F('Monto TOTAL', 'pfMonto', it.monto, 'type="number" placeholder="0"')
+      + F('Nº de meses', 'pfMeses', it.meses, 'type="number" min="1" placeholder="3, 6, 12…"')
+      + `<div class="pf-field"><label>Tarjeta</label><select id="pfTarjeta">${finCardOptions(it.tarjeta)}</select></div>`
+      + F('Fecha de primer pago', 'pfInicio', it.inicio || hoy, 'type="date"')
+      + F('Día límite de pago (opcional)', 'pfDiaLimite', it.diaLimite, 'type="number" min="1" max="31"')
+      + TA('Notas (opcional)', 'pfNota', it.nota, 'placeholder="Detalle…"');
+  }
+  if (tipo === 'inversion') {
+    return F('Nombre', 'pfInvNombre', it.nombre, 'placeholder="Ej. CETES, Afore, GBM…"')
+      + F('Institución (opcional)', 'pfInstitucion', it.institucion, '')
+      + F('Monto invertido inicial', 'pfMontoInicial', it.montoInicial, 'type="number" placeholder="0"')
+      + F('Valor actual', 'pfValorActual', it.valorActual !== undefined ? it.valorActual : it.montoInicial, 'type="number" placeholder="0"')
+      + F('Fecha de inicio', 'pfFecha', it.fecha || hoy, 'type="date"')
+      + F('Tasa de interés anual % (opcional)', 'pfTasaInteres', it.tasaInteres, 'type="number" step="0.01"')
+      + F('Fecha de fin / vencimiento (opcional)', 'pfFechaFin', it.fechaFin, 'type="date"')
+      + F('Nota (opcional)', 'pfNota', it.nota, '');
+  }
+  return '';
+}
+function finFormaPagoChange() { const v = finFval('pfFormaPago'); const t = finF('pfTarjeta'); if (t) t.style.display = (v === 'Tarjeta') ? 'block' : 'none'; }
+function finDeudaDir(d) { finF('pfDir').value = d; finF('pdMe').className = 'tbtn' + (d === 'medeben' ? ' sel' : ''); finF('pdYo').className = 'tbtn' + (d === 'debo' ? ' sel' : ''); }
+function finTarjTipo(t) { finF('pfCtipo').value = t; finF('ptC').className = 'tbtn' + (t === 'TDC' ? ' sel' : ''); finF('ptD').className = 'tbtn' + (t === 'TDD' ? ' sel' : ''); const p = finF('ptP'); if (p) p.className = 'tbtn' + (t === 'PUNTOS' ? ' sel' : ''); }
+async function finCopiarCampo(inputId) { const el = finF(inputId); if (!el || !el.value) return; try { await navigator.clipboard.writeText(el.value); showToast('Copiado'); } catch (e) {} }
+
+function finResizeFotoA(file, onDone) {
+  const r = new FileReader();
+  r.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 700, scale = Math.min(1, MAX / img.width);
+      canvas.width = img.width * scale; canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      onDone(canvas.toDataURL('image/jpeg', .8));
+    };
+    img.src = ev.target.result;
+  };
+  r.readAsDataURL(file);
+}
+function finTarjFotoFile(e) {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  finResizeFotoA(f, dataUrl => {
+    finTarjFoto = { b64: dataUrl.split(',')[1], mime: 'image/jpeg' }; finTarjFotoUrl = '';
+    const pv = finF('pfTarjFotoPrev'); if (pv) { pv.src = dataUrl; pv.style.display = 'block'; }
+    const del = finF('pfTarjFotoDel'); if (del) del.style.display = 'inline-block';
+  });
+}
+function finTarjFotoClear() { finTarjFoto = { b64: '', mime: '' }; finTarjFotoUrl = ''; const pv = finF('pfTarjFotoPrev'); if (pv) { pv.style.display = 'none'; pv.src = ''; } const del = finF('pfTarjFotoDel'); if (del) del.style.display = 'none'; }
+function finDeudaFotoFile(e) {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  finResizeFotoA(f, dataUrl => {
+    finDeudaFoto = { b64: dataUrl.split(',')[1], mime: 'image/jpeg' }; finDeudaFotoUrl = '';
+    const pv = finF('pfDeudaFotoPrev'); if (pv) { pv.src = dataUrl; pv.style.display = 'block'; }
+    const del = finF('pfDeudaFotoDel'); if (del) del.style.display = 'inline-block';
+  });
+}
+function finDeudaFotoClear() { finDeudaFoto = { b64: '', mime: '' }; finDeudaFotoUrl = ''; const pv = finF('pfDeudaFotoPrev'); if (pv) { pv.style.display = 'none'; pv.src = ''; } const del = finF('pfDeudaFotoDel'); if (del) del.style.display = 'none'; }
+
+async function finFormSave() {
+  const t = finFormTipo;
+  const prevItem = finFormId ? finItems.find(x => x.id === finFormId) : null;
+  const hoy = hoyISO();
+  const base = { id: finFormId, tipo: t, fecha_captura: (prevItem && prevItem.fecha_captura) || hoy, fecha_actualizacion: hoy };
+  const btn = finF('finFormSaveBtn');
+  let item;
+  if (t === 'ingreso') {
+    if (!finFval('pfConcepto').trim()) { showToast('Escribe un concepto'); return; }
+    item = { ...base, concepto: finFval('pfConcepto').trim(), monto: parseFloat(finFval('pfMonto')) || 0, fecha: finFval('pfFecha'), nota: finFval('pfNota').trim() };
+  } else if (t === 'deuda') {
+    if (!finFval('pfPersona').trim()) { showToast('¿Con quién?'); return; }
+    let fotoUrl = finDeudaFotoUrl;
+    if (finDeudaFoto.b64) {
+      btn.disabled = true; btn.textContent = 'Subiendo foto…';
+      const up = await apiCall('uploadTarjetaFoto', { owner: finOwner, pass: finPass, base64: finDeudaFoto.b64, mimeType: finDeudaFoto.mime });
+      if (up && up.ok) fotoUrl = up.url; else { btn.disabled = false; btn.textContent = 'Guardar'; showToast('⚠ No se pudo subir la foto'); return; }
+    }
+    item = { ...base, dir: finFval('pfDir') || 'medeben', persona: finFval('pfPersona').trim(), monto: parseFloat(finFval('pfMonto')) || 0, fecha: finFval('pfFecha') || hoy, fechaPago: finFval('pfFechaPago'), nota: finFval('pfNota').trim(), fotoUrl, pagos: (prevItem && prevItem.pagos) || {} };
+  } else if (t === 'fijo') {
+    if (!finFval('pfConcepto').trim()) { showToast('Escribe un concepto'); return; }
+    item = { ...base, concepto: finFval('pfConcepto').trim(), tipoPago: finFval('pfTipoPago') || 'recurrente', monto: parseFloat(finFval('pfMonto')) || 0, diaLimite: finFval('pfDiaLimite'), categoria: finFval('pfCategoria').trim(), formaPago: finFval('pfFormaPago'), tarjeta: (finFval('pfFormaPago') === 'Tarjeta' ? finFval('pfTarjeta') : ''), nota: finFval('pfNota').trim(), pagos: (prevItem && prevItem.pagos) || {}, cancelado: (prevItem && prevItem.cancelado) || false };
+  } else if (t === 'tarjeta') {
+    if (!finFval('pfBanco').trim() && !finFval('pfTarjNombre').trim()) { showToast('Pon al menos alias o banco'); return; }
+    let fotoUrl = finTarjFotoUrl;
+    if (finTarjFoto.b64) {
+      btn.disabled = true; btn.textContent = 'Subiendo foto…';
+      const up = await apiCall('uploadTarjetaFoto', { owner: finOwner, pass: finPass, base64: finTarjFoto.b64, mimeType: finTarjFoto.mime });
+      if (up && up.ok) fotoUrl = up.url; else { btn.disabled = false; btn.textContent = 'Guardar'; showToast('⚠ No se pudo subir la foto'); return; }
+    }
+    item = {
+      ...base, nombre: finFval('pfTarjNombre').trim(), titular: finFval('pfTitular').trim(), banco: finFval('pfBanco').trim(),
+      ctipo: finFval('pfCtipo') || 'TDC', red: finFval('pfRed').trim(), fotoUrl,
+      termFisica: finFval('pfTermFis').trim(), termVirtual: finFval('pfTermVir').trim(),
+      diaCorte: finFval('pfDiaCorte'), diaLimite: finFval('pfDiaLimite'), creditoMax: parseFloat(finFval('pfCreditoMax')) || 0,
+      interesAnual: parseFloat(finFval('pfInteres')) || 0, comisionTardio: parseFloat(finFval('pfComisionTardio')) || 0,
+      comisionInactividad: parseFloat(finFval('pfComisionInactividad')) || 0, requisitoMinimo: finFval('pfRequisitoMinimo').trim(),
+      anualidad: finFval('pfAnualidad').trim(), clabe: finFval('pfClabe').trim(), numFisica: finFval('pfNumFis').trim(),
+      numVirtual: finFval('pfNumVir').trim(), venceFisica: finFval('pfVenceFis').trim(), venceVirtual: finFval('pfVenceVir').trim(),
+      pin: finFval('pfPin').trim(), appUsuario: finFval('pfAppUsuario').trim(), appPass: finFval('pfAppPass').trim(),
+      appCuenta: finFval('pfAppCuenta').trim(), notaConfidencial: finFval('pfNotaConfidencial').trim(), nota: finFval('pfNotaTarj').trim()
+    };
+  } else if (t === 'msi') {
+    if (!finFval('pfConcepto').trim()) { showToast('¿Qué compraste?'); return; }
+    item = { ...base, concepto: finFval('pfConcepto').trim(), monto: parseFloat(finFval('pfMonto')) || 0, meses: parseInt(finFval('pfMeses')) || 1, tarjeta: finFval('pfTarjeta'), inicio: finFval('pfInicio'), diaLimite: finFval('pfDiaLimite'), nota: finFval('pfNota').trim(), pagadas: (prevItem && prevItem.pagadas) || {} };
+  } else if (t === 'inversion') {
+    if (!finFval('pfInvNombre').trim()) { showToast('Escribe un nombre'); return; }
+    item = { ...base, nombre: finFval('pfInvNombre').trim(), institucion: finFval('pfInstitucion').trim(), montoInicial: parseFloat(finFval('pfMontoInicial')) || 0, valorActual: parseFloat(finFval('pfValorActual')) || 0, fecha: finFval('pfFecha'), tasaInteres: parseFloat(finFval('pfTasaInteres')) || 0, fechaFin: finFval('pfFechaFin'), nota: finFval('pfNota').trim() };
+  } else return;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  const ok = await finSaveItem(item);
+  btn.disabled = false; btn.textContent = 'Guardar';
+  if (ok) { cerrarModal('modalFinItem'); showToast('✓ Guardado'); }
 }
 </script>
 </body>
