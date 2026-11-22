@@ -167,6 +167,11 @@ a{color:var(--accent)}
 .rp-capa-row img{height:40px;border-radius:8px;object-fit:cover;flex:none}
 .rp-detect-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px}
 .rp-detect-card img{width:64px;height:64px;object-fit:contain;border-radius:8px;background:var(--card2);flex:none}
+.rp-arrow{position:absolute;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--card);border:1px solid var(--border);font-size:15px;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,.2);opacity:.92}
+.rp-arrow.left{left:4px}
+.rp-arrow.right{right:4px}
+.rp-capa-row.nada{opacity:.65}
+.rp-capa-row .rp-nada-icon{width:40px;height:40px;flex:none;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:17px}
 .mov-grid{display:grid;grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;background:var(--card2)}
 .mov-grid input,.mov-grid select{padding:7px 8px;border:1px solid var(--border2);border-radius:7px;background:var(--card);color:var(--ink);font-size:12.5px}
 .mov-acc{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
@@ -1663,17 +1668,65 @@ async function rpGuardarDetecciones() {
 
 // ---- Vestidor: armador por capas sobre el maniquí compartido ----
 let rpOutfitBoard = null;
+// Fila fija (% del lienzo) donde van las flechas ‹› de cada categoría — igual
+// que en ropa.html: cada categoría siempre aparece a la misma altura sobre el
+// maniquí, sin importar qué prenda esté puesta ahí en ese momento.
+const RP_FILA_FLECHA_CATEGORIA = { 'Accesorios': 10, 'Abrigos': 26, 'Ropa superior': 32, 'Deportiva': 32, 'Vestidos': 36, 'Bolsos': 44, 'Ropa interior': 48, 'Ropa inferior': 56, 'Calzado': 88 };
+function rpItemsPorCategoria(cat) { return rpPrendasActivas().filter(p => p.Categoria === cat && p.FotoGeneradaURL); }
+// Centinela "nada" — una categoría puede quedar deslizada a "sin prenda" sin
+// borrarla del outfit, para poder volver a una prenda real con ‹› sin
+// tener que re-agregarla desde cero.
+function rpClaveNinguno(categoria) { return 'ninguno:' + categoria; }
+function rpEsNinguno(id) { return typeof id === 'string' && id.indexOf('ninguno:') === 0; }
+function rpCategoriaDeNinguno(id) { return id.slice('ninguno:'.length); }
+// Separa renglones que queden muy juntos (mínimo 9% entre uno y otro) — misma
+// matemática que el original, determinista: la misma lista de categorías
+// siempre da los mismos renglones.
+function rpFilasFlechas(ids) {
+  const base = ids.map(id => {
+    const cat = rpEsNinguno(id) ? rpCategoriaDeNinguno(id) : (rpFindPrenda(id) || {}).Categoria;
+    const v = cat ? RP_FILA_FLECHA_CATEGORIA[cat] : undefined;
+    return (v === undefined) ? 50 : v;
+  });
+  const orden = base.map((v, i) => ({ i, v })).sort((a, b) => a.v - b.v);
+  let ultimo = -99;
+  orden.forEach(o => { o.v = Math.max(o.v, ultimo + 9); ultimo = o.v; });
+  const exceso = orden.length ? Math.max(0, orden[orden.length - 1].v - 94) : 0;
+  const res = new Array(base.length);
+  orden.forEach(o => { res[o.i] = Math.min(94, Math.max(6, o.v - exceso)); });
+  return res;
+}
+function rpCapasArray() {
+  const filas = rpFilasFlechas(rpOutfitBoard.capas);
+  return rpOutfitBoard.capas.map((id, i) => {
+    const topPct = filas[i];
+    if (rpEsNinguno(id)) {
+      const cat = rpCategoriaDeNinguno(id);
+      if (rpItemsPorCategoria(cat).length < 1) return '';
+      return `<button class="rp-arrow left" style="top:${topPct}%" onclick="rpCambiarPrendaCarrusel('${id}',-1)" title="Elegir ${escapeHtml(cat)}">‹</button>` +
+        `<button class="rp-arrow right" style="top:${topPct}%" onclick="rpCambiarPrendaCarrusel('${id}',1)" title="Elegir ${escapeHtml(cat)}">›</button>`;
+    }
+    const p = rpFindPrenda(id);
+    if (!p || !p.FotoGeneradaURL) return '';
+    let flechas = '';
+    if (rpItemsPorCategoria(p.Categoria).length >= 1) {
+      flechas = `<button class="rp-arrow left" style="top:${topPct}%" onclick="rpCambiarPrendaCarrusel('${p.ID}',-1)" title="Prenda anterior de ${escapeHtml(p.Categoria)}">‹</button>` +
+        `<button class="rp-arrow right" style="top:${topPct}%" onclick="rpCambiarPrendaCarrusel('${p.ID}',1)" title="Siguiente prenda de ${escapeHtml(p.Categoria)}">›</button>`;
+    }
+    return `<img class="rp-doll-img" src="${p.FotoGeneradaURL}" onclick="abrirLightbox('${p.FotoGeneradaURL}')">` + flechas;
+  });
+}
 function rpRenderVestidor() {
   const el = document.getElementById('rpContent');
   if (!rpOutfitBoard) {
     const inicial = [];
     ['Ropa inferior', 'Ropa superior', 'Vestidos', 'Calzado'].forEach(cat => {
-      const items = rpPrendasActivas().filter(p => p.Categoria === cat && p.FotoGeneradaURL);
+      const items = rpItemsPorCategoria(cat);
       if (items.length) inicial.push(items[0].ID);
     });
     rpOutfitBoard = { capas: inicial };
   } else {
-    rpOutfitBoard.capas = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
+    rpOutfitBoard.capas = rpOutfitBoard.capas.filter(id => rpFindPrenda(id) || rpEsNinguno(id));
   }
   const genero = rpGenero();
   el.innerHTML = `
@@ -1697,11 +1750,7 @@ async function rpRenderPreview() {
   const maniqui = await rpObtenerManiquiBase(rpGenero());
   if (!document.getElementById('rpDollWrap')) return;
   if (!maniqui || !maniqui.url) { cont.innerHTML = '<p class="hint" style="padding:40px 0;text-align:center">No se pudo generar el maniquí.</p>'; return; }
-  const capasHtml = rpOutfitBoard.capas.map(id => {
-    const p = rpFindPrenda(id);
-    return (p && p.FotoGeneradaURL) ? `<img class="rp-doll-img" src="${p.FotoGeneradaURL}" onclick="abrirLightbox('${p.FotoGeneradaURL}')">` : '';
-  }).join('');
-  cont.innerHTML = `<img class="rp-doll-img" src="${maniqui.url}">` + capasHtml;
+  cont.innerHTML = `<img class="rp-doll-img" src="${maniqui.url}">` + rpCapasArray().join('');
 }
 function rpRenderCapasLista() {
   const cont = document.getElementById('rpCapasLista');
@@ -1711,15 +1760,48 @@ function rpRenderCapasLista() {
     rpOutfitBoard.capas.slice().reverse().map(id => {
       const idx = rpOutfitBoard.capas.indexOf(id);
       const esUltimo = idx === rpOutfitBoard.capas.length - 1, esPrimero = idx === 0;
+      if (rpEsNinguno(id)) {
+        const cat = rpCategoriaDeNinguno(id);
+        return `<div class="rp-capa-row nada">
+          <div class="rp-nada-icon">🚫</div>
+          <div style="flex:1;font-size:12.5px"><i>Sin ${escapeHtml(cat)} — desliza ‹› para elegir</i></div>
+          <button class="btn btn-sec btn-sm" onclick="rpCambiarPrendaCarrusel('${id}',-1)">‹</button>
+          <button class="btn btn-sec btn-sm" onclick="rpCambiarPrendaCarrusel('${id}',1)">›</button>
+          <button class="btn btn-sec btn-sm" ${esUltimo ? 'disabled' : ''} onclick="rpMoverCapa('${id}',1)">▲</button>
+          <button class="btn btn-sec btn-sm" ${esPrimero ? 'disabled' : ''} onclick="rpMoverCapa('${id}',-1)">▼</button>
+          <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="rpQuitarCapa('${id}')">🗑</button>
+        </div>`;
+      }
       const p = rpFindPrenda(id); if (!p) return '';
+      const otras = rpItemsPorCategoria(p.Categoria).length > 1;
       return `<div class="rp-capa-row">
         ${rpFotoHtml(p, { estilo: 'height:40px;border-radius:8px', clickable: false })}
         <div style="flex:1;font-size:12.5px">${escapeHtml(p.Tipo || p.Categoria || '')}</div>
+        ${otras ? `<button class="btn btn-sec btn-sm" onclick="rpCambiarPrendaCarrusel('${p.ID}',-1)">‹</button>
+        <button class="btn btn-sec btn-sm" onclick="rpCambiarPrendaCarrusel('${p.ID}',1)">›</button>` : ''}
         <button class="btn btn-sec btn-sm" ${esUltimo ? 'disabled' : ''} onclick="rpMoverCapa('${id}',1)">▲</button>
         <button class="btn btn-sec btn-sm" ${esPrimero ? 'disabled' : ''} onclick="rpMoverCapa('${id}',-1)">▼</button>
         <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="rpQuitarCapa('${id}')">🗑</button>
       </div>`;
     }).join('');
+}
+// Carrusel: cambia la prenda de ESTA capa por la siguiente/anterior de su
+// misma categoría (incluyendo "nada" como una opción más en la vuelta), sin
+// tocar su posición de orden (arriba/abajo) en el outfit.
+function rpCambiarPrendaCarrusel(idActual, direccion) {
+  const categoria = rpEsNinguno(idActual) ? rpCategoriaDeNinguno(idActual) : (rpFindPrenda(idActual) || {}).Categoria;
+  if (!categoria) return;
+  const reales = rpItemsPorCategoria(categoria);
+  if (!reales.length) return;
+  const opciones = [...reales.map(p => p.ID), rpClaveNinguno(categoria)];
+  const idxActual = opciones.indexOf(idActual);
+  let nuevoIdx = (idxActual < 0 ? 0 : idxActual) + direccion;
+  if (nuevoIdx < 0) nuevoIdx = opciones.length - 1;
+  if (nuevoIdx >= opciones.length) nuevoIdx = 0;
+  const capaIdx = rpOutfitBoard.capas.indexOf(idActual);
+  if (capaIdx < 0) return;
+  rpOutfitBoard.capas[capaIdx] = opciones[nuevoIdx];
+  rpRenderPreview(); rpRenderCapasLista();
 }
 function rpMoverCapa(id, delta) {
   const idx = rpOutfitBoard.capas.indexOf(id); if (idx < 0) return;
@@ -1733,20 +1815,27 @@ function rpAbrirAgregarCapa() {
   if (!candidatos.length) { showToast('No tienes más prendas con capa lista para agregar'); return; }
   finAbrirVincular('Agregar prenda al outfit', 'Elige una prenda de tu catálogo', candidatos,
     p => ({ id: p.ID, texto: `${RP_CATEGORIA_ICONO[p.Categoria] || '👕'} ${escapeHtml(p.Tipo || p.Categoria)}${p.Color ? ' · ' + escapeHtml(p.Color) : ''}` }),
-    id => { rpOutfitBoard.capas.push(id); rpRenderPreview(); rpRenderCapasLista(); });
+    id => {
+      const p = rpFindPrenda(id);
+      const idxNinguno = p ? rpOutfitBoard.capas.indexOf(rpClaveNinguno(p.Categoria)) : -1;
+      if (idxNinguno >= 0) rpOutfitBoard.capas[idxNinguno] = id; else rpOutfitBoard.capas.push(id);
+      rpRenderPreview(); rpRenderCapasLista();
+    });
 }
 function rpUsarOutfitHoy() {
-  if (!rpOutfitBoard.capas.length) { showToast('Agrega al menos una prenda'); return; }
-  apiCall('registrarUso', { prendaIds: rpOutfitBoard.capas, fecha: hoyISO() }).then(res => {
+  const ids = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
+  if (!ids.length) { showToast('Agrega al menos una prenda'); return; }
+  apiCall('registrarUso', { prendaIds: ids, fecha: hoyISO() }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     showToast('✓ Outfit registrado como usado hoy');
     cargarTodo();
   });
 }
 function rpGuardarOutfit() {
-  if (!rpOutfitBoard.capas.length) { showToast('Agrega al menos una prenda'); return; }
+  const ids = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
+  if (!ids.length) { showToast('Agrega al menos una prenda'); return; }
   const nota = prompt('¿Notas para este outfit? (opcional)') || '';
-  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: hoyISO(), PrendaIDsJSON: JSON.stringify(rpOutfitBoard.capas), Motivo: nota, Papelera: false } }).then(res => {
+  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: hoyISO(), PrendaIDsJSON: JSON.stringify(ids), Motivo: nota, Papelera: false } }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     showToast('✓ Outfit guardado');
   });
