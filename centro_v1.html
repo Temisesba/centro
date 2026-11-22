@@ -511,6 +511,7 @@ function abrirConfig() { irAVista('config'); }
 // ============================================================================
 // MODALES — botón atrás de Android cierra el modal, no sale de la app (BASES_APPS)
 // ============================================================================
+let suprimirPopstate = false; // evita re-procesar el popstate que generamos nosotros mismos al cerrar por botón
 function abrirModal(id) {
   document.getElementById(id).classList.remove('hidden');
   modalStack.push(id);
@@ -519,7 +520,10 @@ function abrirModal(id) {
 function cerrarModal(id) {
   document.getElementById(id).classList.add('hidden');
   const i = modalStack.indexOf(id);
-  if (i > -1) modalStack.splice(i, 1);
+  if (i === -1) return; // ya se había cerrado (ej. por el back del celular)
+  modalStack.splice(i, 1);
+  suprimirPopstate = true;
+  history.back(); // consume la entrada que abrirModal empujó, para no desincronizar el historial
 }
 function intentarCerrarModal(id, hayCambios) {
   if (hayCambios === undefined) hayCambios = true; // conservador: pregunta si no se sabe
@@ -527,6 +531,7 @@ function intentarCerrarModal(id, hayCambios) {
   cerrarModal(id);
 }
 window.addEventListener('popstate', () => {
+  if (suprimirPopstate) { suprimirPopstate = false; return; } // este popstate ya lo provocamos nosotros
   if (modalStack.length) {
     const top = modalStack.pop();
     document.getElementById(top).classList.add('hidden');
