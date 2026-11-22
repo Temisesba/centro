@@ -193,9 +193,22 @@ a{color:var(--accent)}
     <button class="fab" onclick="abrirModalInventario()">+</button>
   </div>
 
-  <!-- ---- ROPA / COMIDAS / ACUERDOS / VIAJES / NOTAS (fase 2-3) ---- -->
-  <div class="view" id="view-ropa"><div class="empty-state">👔 Ropa — próximamente (fase 2)<br><span style="font-size:12px">Por ahora, usa el cuadro de IA en Inicio: "hoy me puse..."</span></div></div>
-  <div class="view" id="view-comidas"><div class="empty-state">🍽️ Comidas — próximamente (fase 2)</div></div>
+  <!-- ---- ROPA ---- -->
+  <div class="view" id="view-ropa">
+    <div class="card" id="resumenRopa"></div>
+    <div class="section-title">Mis prendas</div>
+    <div class="card" id="listaPrendas"><div class="loading">Cargando…</div></div>
+    <button class="fab" onclick="abrirModalPrenda()">+</button>
+  </div>
+
+  <!-- ---- COMIDAS ---- -->
+  <div class="view" id="view-comidas">
+    <div class="card" id="resumenComidas"></div>
+    <div class="section-title">Registro de hoy</div>
+    <div class="card" id="listaComidasHoy"><div class="loading">Cargando…</div></div>
+    <button class="fab" onclick="abrirModalComida()">+</button>
+  </div>
+
   <div class="view" id="view-acuerdos"><div class="empty-state">🤝 Acuerdos — próximamente (fase 3)</div></div>
   <div class="view" id="view-viajes"><div class="empty-state">✈️ Itinerario — próximamente (fase 3)</div></div>
   <div class="view" id="view-notas"><div class="empty-state">📝 Notas — próximamente (fase 3)</div></div>
@@ -307,6 +320,52 @@ a{color:var(--accent)}
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="cerrarModal('modalCategoriaInv')">Cancelar</button>
       <button class="btn" onclick="guardarCategoriaInv()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: prenda nueva ============ -->
+<div id="modalPrenda" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalPrenda')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nueva prenda</div>
+    <div class="field"><label>Nombre / tipo</label><input id="pNombre" type="text" placeholder="Chamarra azul"></div>
+    <div class="ia-row">
+      <div class="field"><label>Color</label><input id="pColor" type="text"></div>
+      <div class="field"><label>Marca</label><input id="pMarca" type="text"></div>
+    </div>
+    <div class="field"><label>Temporada</label><input id="pTemporada" type="text" placeholder="Invierno, verano..."></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalPrenda')">Cancelar</button>
+      <button class="btn" id="btnGuardarPrenda" onclick="guardarPrenda()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: comida nueva ============ -->
+<div id="modalComida" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalComida')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nuevo registro de comida</div>
+    <div class="field"><label>¿Qué comiste?</label><textarea id="cmDescripcion" style="min-height:60px"></textarea></div>
+    <div class="field"><label>Momento</label>
+      <div class="pill-group" id="cmSlotPills">
+        <span class="pill on" data-slot="desayuno" onclick="elegirSlotComida('desayuno')">Desayuno</span>
+        <span class="pill" data-slot="comida" onclick="elegirSlotComida('comida')">Comida</span>
+        <span class="pill" data-slot="cena" onclick="elegirSlotComida('cena')">Cena</span>
+        <span class="pill" data-slot="snack" onclick="elegirSlotComida('snack')">Snack</span>
+      </div>
+    </div>
+    <button class="btn btn-sec btn-sm" onclick="estimarNutricionIA()" id="btnEstimarIA" style="margin-bottom:10px">✨ Estimar calorías con IA</button>
+    <div class="ia-row">
+      <div class="field"><label>Energía (kcal)</label><input id="cmEnergia" type="number"></div>
+      <div class="field"><label>Proteína (g)</label><input id="cmProteina" type="number"></div>
+    </div>
+    <div class="ia-row">
+      <div class="field"><label>Carbohidratos (g)</label><input id="cmCarbohidratos" type="number"></div>
+      <div class="field"><label>Grasas (g)</label><input id="cmGrasas" type="number"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalComida')">Cancelar</button>
+      <button class="btn" id="btnGuardarComida" onclick="guardarComida()">Guardar</button>
     </div>
   </div>
 </div>
@@ -425,10 +484,10 @@ function cargarTodo() {
     if (!res.ok) { alert('Error cargando datos: ' + res.error); return; }
     DATA = res.data;
     localStorage.setItem('centro_ultimo_data', JSON.stringify(DATA)); // último dato bueno, para ver offline
-    renderInicio(); renderGastos(); renderInventario(); renderConfig();
+    renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderConfig();
   }).catch(() => {
     const cache = localStorage.getItem('centro_ultimo_data');
-    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderConfig(); }
+    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderConfig(); }
   });
 }
 
@@ -674,6 +733,97 @@ function guardarInventario() {
       UbicacionPadreId: invPadreActual, Usuario: usuarioActual.Nombre
     }
   })).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); cargarTodo(); } });
+}
+
+// ============================================================================
+// ROPA — prendas en INVENTARIO (Categoria='Ropa') + "hoy me puse esto"
+// ============================================================================
+function renderRopa() {
+  const prendas = (DATA.INVENTARIO || []).filter(i => i.Categoria === 'Ropa' && String(i.EsUbicacion) !== 'true');
+  const usosHoy = (DATA.USO_ROPA || []).filter(u => u.Fecha === hoyISO());
+  document.getElementById('resumenRopa').innerHTML = `
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Prendas registradas</span></div><span class="lr-val">${prendas.length}</span></div>
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Usadas hoy</span></div><span class="lr-val">${usosHoy.length}</span></div>
+  `;
+  const cont = document.getElementById('listaPrendas');
+  if (!prendas.length) { cont.innerHTML = '<div class="empty-state">Sin prendas todavía</div>'; return; }
+  cont.innerHTML = prendas.map(p => `
+    <div class="list-row">
+      <div class="lr-main"><span class="lr-title">${escapeHtml(p.Nombre)}</span><span class="lr-sub">${escapeHtml(p.Color || '')}${p.Marca ? ' · ' + escapeHtml(p.Marca) : ''}${p.VecesUsado ? ' · usada ' + p.VecesUsado + ' veces' : ''}</span></div>
+      <button class="btn btn-sec btn-sm" onclick="marcarUsoPrenda('${p.ID}')">Me la puse hoy</button>
+    </div>`).join('');
+}
+function abrirModalPrenda() {
+  ['pNombre', 'pColor', 'pMarca', 'pTemporada'].forEach(id => document.getElementById(id).value = '');
+  abrirModal('modalPrenda');
+}
+function guardarPrenda() {
+  const nombre = document.getElementById('pNombre').value.trim();
+  if (!nombre) return;
+  conEstadoGuardando('btnGuardarPrenda', () => apiCall('saveRow', {
+    table: 'INVENTARIO', row: {
+      Nombre: nombre, Categoria: 'Ropa',
+      Color: document.getElementById('pColor').value, Marca: document.getElementById('pMarca').value,
+      Temporada: document.getElementById('pTemporada').value, Usuario: usuarioActual.Nombre
+    }
+  })).then(res => { if (res && res.ok) { cerrarModal('modalPrenda'); cargarTodo(); } });
+}
+function marcarUsoPrenda(id) {
+  apiCall('registrarUsoPrenda', { prendaIds: [id], fecha: hoyISO(), usuario: usuarioActual.Nombre }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    cargarTodo();
+  });
+}
+
+// ============================================================================
+// COMIDAS — registro con estimación de macros por IA
+// ============================================================================
+let comidaSlotActual = 'desayuno';
+function renderComidas() {
+  const hoy = hoyISO();
+  const registros = (DATA.NUTRICION_LOG || []).filter(r => r.Fecha === hoy);
+  const totalKcal = registros.reduce((s, r) => s + (Number(r.Energia) || 0), 0);
+  document.getElementById('resumenComidas').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Calorías de hoy</span></div><span class="lr-val">${totalKcal} kcal</span></div>`;
+  const cont = document.getElementById('listaComidasHoy');
+  if (!registros.length) { cont.innerHTML = '<div class="empty-state">Sin registros hoy</div>'; return; }
+  cont.innerHTML = registros.map(r => `
+    <div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(r.Descripcion || '')}</span><span class="lr-sub">${escapeHtml(r.Slot || '')}${r.Energia ? ' · ' + r.Energia + ' kcal' : ''}</span></div></div>`).join('');
+}
+function elegirSlotComida(slot) {
+  comidaSlotActual = slot;
+  document.querySelectorAll('#cmSlotPills .pill').forEach(p => p.classList.toggle('on', p.dataset.slot === slot));
+}
+function abrirModalComida() {
+  document.getElementById('cmDescripcion').value = '';
+  ['cmEnergia', 'cmProteina', 'cmCarbohidratos', 'cmGrasas'].forEach(id => document.getElementById(id).value = '');
+  elegirSlotComida('desayuno');
+  abrirModal('modalComida');
+}
+function estimarNutricionIA() {
+  const descripcion = document.getElementById('cmDescripcion').value.trim();
+  if (!descripcion) { alert('Describe qué comiste primero'); return; }
+  const btn = document.getElementById('btnEstimarIA');
+  btn.disabled = true; btn.textContent = 'Estimando…';
+  apiCall('estimarNutricionTexto', { descripcion: descripcion }).then(res => {
+    btn.disabled = false; btn.textContent = '✨ Estimar calorías con IA';
+    if (!res.ok) { alert('No se pudo estimar: ' + res.error); return; }
+    document.getElementById('cmEnergia').value = res.datos.energia || '';
+    document.getElementById('cmProteina').value = res.datos.proteina || '';
+    document.getElementById('cmCarbohidratos').value = res.datos.carbohidratos || '';
+    document.getElementById('cmGrasas').value = res.datos.grasas || '';
+  });
+}
+function guardarComida() {
+  const descripcion = document.getElementById('cmDescripcion').value.trim();
+  if (!descripcion) return;
+  conEstadoGuardando('btnGuardarComida', () => apiCall('saveRow', {
+    table: 'NUTRICION_LOG', row: {
+      Usuario: usuarioActual.Nombre, Fecha: hoyISO(), Hora: new Date().toTimeString().slice(0, 5),
+      Descripcion: descripcion, Slot: comidaSlotActual,
+      Energia: document.getElementById('cmEnergia').value, Proteina: document.getElementById('cmProteina').value,
+      Carbohidratos: document.getElementById('cmCarbohidratos').value, Grasas: document.getElementById('cmGrasas').value
+    }
+  })).then(res => { if (res && res.ok) { cerrarModal('modalComida'); cargarTodo(); } });
 }
 
 // ============================================================================
