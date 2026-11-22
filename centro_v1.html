@@ -158,6 +158,15 @@ a{color:var(--accent)}
   background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:20px;font-size:13px;z-index:400;max-width:85vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .lightbox-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:410;display:flex;align-items:center;justify-content:center;padding:20px}
 .lightbox-overlay img{max-width:100%;max-height:100%;border-radius:8px}
+.rp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rp-card{background:var(--card2);border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;border:1px solid var(--border)}
+.rp-card-body{padding:6px 8px;font-size:11px;color:var(--ink2);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-doll-wrap{position:relative;max-width:260px;aspect-ratio:9/16;margin:6px auto 0;background:var(--card2);border-radius:var(--radius);overflow:hidden}
+.rp-doll-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.rp-capa-row{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;flex-wrap:wrap}
+.rp-capa-row img{height:40px;border-radius:8px;object-fit:cover;flex:none}
+.rp-detect-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px}
+.rp-detect-card img{width:64px;height:64px;object-fit:contain;border-radius:8px;background:var(--card2);flex:none}
 .mov-grid{display:grid;grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;background:var(--card2)}
 .mov-grid input,.mov-grid select{padding:7px 8px;border:1px solid var(--border2);border-radius:7px;background:var(--card);color:var(--ink);font-size:12.5px}
 .mov-acc{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
@@ -288,10 +297,12 @@ a{color:var(--accent)}
 
   <!-- ---- ROPA ---- -->
   <div class="view" id="view-ropa">
-    <div class="card" id="resumenRopa"></div>
-    <div class="section-title">Mis prendas</div>
-    <div class="card" id="listaPrendas"><div class="loading">Cargando…</div></div>
-    <button class="fab" onclick="abrirModalPrenda()">+</button>
+    <div class="pill-group" id="rpTabs" style="margin-bottom:14px">
+      <span class="pill on" data-sec="catalogo" onclick="rpSetSection('catalogo')">👕 Catálogo</span>
+      <span class="pill" data-sec="vestidor" onclick="rpSetSection('vestidor')">👗 Vestidor</span>
+    </div>
+    <div id="rpContent"><div class="loading">Cargando…</div></div>
+    <button class="fab" id="rpFab" onclick="abrirModalPrenda()">+</button>
   </div>
 
   <!-- ---- COMIDAS ---- -->
@@ -460,19 +471,16 @@ a{color:var(--accent)}
 </div>
 
 <!-- ============ MODAL: prenda nueva ============ -->
-<div id="modalPrenda" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalPrenda')">
+<div id="modalPrenda" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalPrenda', rpTieneCambiosPendientes())">
   <div class="modal-sheet">
-    <div class="modal-title">Nueva prenda</div>
-    <div class="field"><label>Categoría</label><select id="pCategoria"></select></div>
-    <div class="field"><label>Tipo</label><input id="pNombre" type="text" placeholder="Chamarra"></div>
-    <div class="ia-row">
-      <div class="field"><label>Color</label><input id="pColor" type="text"></div>
-      <div class="field"><label>Marca</label><input id="pMarca" type="text"></div>
+    <div class="modal-title">Agregar prenda(s)</div>
+    <div id="rpCaptureArea">
+      <p class="hint" style="color:var(--ink2);font-size:13px;margin-bottom:10px">Toma o elige una foto — la IA detecta cada prenda, color y tipo; tú revisas y corriges antes de guardar.</p>
+      <input type="file" accept="image/*" id="rpFotoInput" style="display:none" onchange="rpFotoSeleccionada(event)">
+      <button class="btn" onclick="document.getElementById('rpFotoInput').click()">📷 Elegir foto</button>
     </div>
-    <div class="field"><label>Temporada</label><input id="pTemporada" type="text" placeholder="Invierno, verano..."></div>
     <div class="modal-actions">
-      <button class="btn btn-sec" onclick="intentarCerrarModal('modalPrenda')">Cancelar</button>
-      <button class="btn" id="btnGuardarPrenda" onclick="guardarPrenda()">Guardar</button>
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalPrenda', rpTieneCambiosPendientes())">Cerrar</button>
     </div>
   </div>
 </div>
@@ -612,7 +620,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Séptima piedra — presupuesto y estadísticas';
+const VERSION_APP = 'Octava piedra — Vestidor real (capas y maniquí)';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -780,7 +788,7 @@ async function cargarTodo() {
   });
 }
 function renderTodo() {
-  renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig();
+  renderInicio(); renderGastos(); renderInventario(); rpRender(); renderComidas(); renderAcuerdos(); renderConfig();
 }
 
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -1206,44 +1214,541 @@ function guardarInventario() {
 }
 
 // ============================================================================
-// ROPA — acciones reales de Ropa.js (getAllRopa/saveRowRopa/registrarUso)
+// ROPA — transplante literal de ropa.html (generarCapaPrenda + chroma-key
+// client-side + maniquí compartido vía MANIQUI_BASE + Vestidor por capas).
+// Deferido a propósito en esta primera tanda (documentado en memoria):
+// lote de varias fotos a la vez, sugerencias "¿ya tienes esta?", recorte
+// manual con arrastre, "Extender/recortar" caja, Cabello, Ajustar/Borrador
+// de una capa ya guardada, Ideas/sugerirOutfit, Outfits guardados (galería),
+// Perfil con tono de piel/edición de Moldes. Lo que SÍ es real: la foto se
+// analiza con IA (extraerPrendas), cada prenda detectada genera su capa
+// transparente real (generarCapaPrenda + quitarFondoColor en el navegador +
+// reposicionarCapa con los moldes reales) y el Vestidor apila esas capas
+// sobre el maniquí compartido (una vez generado, igual para cualquiera que
+// use este mismo backend).
 // ============================================================================
-function renderRopa() {
-  const prendas = ((DATA.ropa && DATA.ropa.prendas) || []);
-  const usosHoy = ((DATA.ropa && DATA.ropa.usos) || []).filter(u => u.Fecha === hoyISO());
-  document.getElementById('resumenRopa').innerHTML = `
-    <div class="list-row"><div class="lr-main"><span class="lr-title">Prendas registradas</span></div><span class="lr-val">${prendas.length}</span></div>
-    <div class="list-row"><div class="lr-main"><span class="lr-title">Usadas hoy</span></div><span class="lr-val">${usosHoy.length}</span></div>
-  `;
-  const cont = document.getElementById('listaPrendas');
-  if (!prendas.length) { cont.innerHTML = '<div class="empty-state">Sin prendas todavía</div>'; return; }
-  cont.innerHTML = prendas.map(p => `
-    <div class="list-row">
-      <div class="lr-main"><span class="lr-title">${escapeHtml(p.Tipo || p.Categoria || '')}</span><span class="lr-sub">${escapeHtml(p.Color || '')}${p.Marca ? ' · ' + escapeHtml(p.Marca) : ''}${p.VecesUsado ? ' · usada ' + p.VecesUsado + ' veces' : ''}</span></div>
-      <button class="btn btn-sec btn-sm" onclick="marcarUsoPrenda('${p.ID}')">Me la puse hoy</button>
-    </div>`).join('');
+const RP_MANIQUI_CANVAS = { w: 720, h: 1280 };
+const RP_ANCLAS = { cabeza: 4.0, rostro: 10.0, cuello: 16.0, hombros: 20.0, pecho: 28.9, cintura: 40.0, cadera: 45.8, munecas: 47.0, rodillas: 73.4, tobillos: 90.4, pies: 93.0 };
+const RP_ZONA_PRESET = {
+  arriba: { ancho: 46, vAlign: 'top', anclaY: 'hombros' },
+  abajo: { ancho: 38, vAlign: 'top', anclaY: 'cintura' },
+  pies: { ancho: 30, vAlign: 'bottom', anclaY: 'pies' },
+  cabeza: { ancho: 32, vAlign: 'top', anclaY: 'cabeza' },
+  accesorio: { ancho: 20, vAlign: 'top', anclaY: 'pecho' },
+  colgante: { ancho: 28, vAlign: 'top', anclaY: 'cadera' }
+};
+const RP_CATEGORIA_ZONA = { 'Calzado': 'pies', 'Ropa superior': 'arriba', 'Ropa inferior': 'abajo', 'Vestidos': 'arriba', 'Abrigos': 'arriba', 'Accesorios': 'accesorio', 'Bolsos': 'colgante', 'Ropa interior': 'abajo', 'Deportiva': 'arriba' };
+const RP_CATEGORIA_ICONO = { 'Calzado': '👟', 'Ropa superior': '👕', 'Ropa inferior': '👖', 'Vestidos': '👗', 'Abrigos': '🧥', 'Accesorios': '🧣', 'Bolsos': '👜', 'Ropa interior': '🩲', 'Deportiva': '🏃' };
+const RP_MOLDES_BASE = [
+  { clave: 'pijama', patrones: ['pijama', 'piyama', 'camison'], regla: { ancho: 48, vAlign: 'top', anclaY: 19.5, xCentro: 50 } },
+  { clave: 'traje-bano', patrones: ['traje de bano', 'vestido de bano', 'banador', 'bikini', 'malla de bano'], regla: { ancho: 34, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'playera', patrones: ['playera', 'camiseta', 'tshirt', 't-shirt', 'polo'], regla: { ancho: 46, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'blusa', patrones: ['blusa', 'camisa', 'camisola'], regla: { ancho: 46, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'sueter', patrones: ['sueter', 'sudadera', 'hoodie', 'jersey', 'pullover', 'cardigan', 'chaleco'], regla: { ancho: 48, vAlign: 'top', anclaY: 19.5, xCentro: 50 } },
+  { clave: 'abrigo', patrones: ['abrigo', 'chamarra', 'chaqueta', 'saco', 'blazer', 'gabardina', 'impermeable', 'trench'], regla: { ancho: 54, vAlign: 'top', anclaY: 19.0, xCentro: 50 } },
+  { clave: 'falda-larga', patrones: ['falda larga', 'falda maxi', 'falda midi', 'maxifalda'], regla: { ancho: 44, vAlign: 'top', anclaY: 41.0, xCentro: 50 } },
+  { clave: 'falda-corta', patrones: ['falda corta', 'minifalda', 'falda mini'], regla: { ancho: 40, vAlign: 'top', anclaY: 41.0, xCentro: 50 } },
+  { clave: 'falda', patrones: ['falda'], regla: { ancho: 40, vAlign: 'top', anclaY: 41.0, xCentro: 50 } },
+  { clave: 'leggings', patrones: ['legging', 'mallas', 'jegging', 'licra'], regla: { ancho: 32, vAlign: 'top', anclaY: 40.0, xCentro: 50 } },
+  { clave: 'short', patrones: ['short', 'bermuda'], regla: { ancho: 38, vAlign: 'top', anclaY: 40.0, xCentro: 50 } },
+  { clave: 'pantalon', patrones: ['pantalon', 'jeans', 'vaquero', 'chino'], regla: { ancho: 38, vAlign: 'top', anclaY: 40.0, xCentro: 50 } },
+  { clave: 'vestido-largo', patrones: ['vestido largo', 'vestido maxi', 'vestido midi'], regla: { ancho: 46, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'vestido-corto', patrones: ['vestido corto', 'vestido mini'], regla: { ancho: 46, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'vestido', patrones: ['vestido'], regla: { ancho: 46, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'jumpsuit', patrones: ['jumpsuit', 'overol', 'mameluco', 'enterizo'], regla: { ancho: 44, vAlign: 'top', anclaY: 20.0, xCentro: 50 } },
+  { clave: 'botas', patrones: ['bota', 'botin'], regla: { ancho: 27, vAlign: 'bottom', anclaY: 93.0, xCentro: 50 } },
+  { clave: 'tenis', patrones: ['tenis', 'sneaker', 'deportivo'], regla: { ancho: 30, vAlign: 'bottom', anclaY: 93.0, xCentro: 50 } },
+  { clave: 'sandalias', patrones: ['sandalia', 'huarache', 'chancla', 'alpargata'], regla: { ancho: 28, vAlign: 'bottom', anclaY: 93.0, xCentro: 50 } },
+  { clave: 'zapatos', patrones: ['zapato', 'tacon', 'mocasin', 'balerina', 'flat', 'zapatilla'], regla: { ancho: 30, vAlign: 'bottom', anclaY: 93.0, xCentro: 50 } },
+  { clave: 'gorro', patrones: ['sombrero', 'gorra', 'gorro', 'boina', 'beanie'], regla: { ancho: 32, vAlign: 'top', anclaY: 4.0, xCentro: 50 } },
+  { clave: 'lentes', patrones: ['lente', 'gafas', 'anteojo'], regla: { ancho: 26, vAlign: 'top', anclaY: 14.0, xCentro: 50 } },
+  { clave: 'aretes', patrones: ['arete', 'pendiente'], regla: { ancho: 8, vAlign: 'top', anclaY: 10.0, xCentro: 50 } },
+  { clave: 'bufanda', patrones: ['bufanda', 'panuelo', 'mascada', 'chalina'], regla: { ancho: 26, vAlign: 'top', anclaY: 16.0, xCentro: 50 } },
+  { clave: 'collar', patrones: ['collar', 'gargantilla', 'cadena'], regla: { ancho: 18, vAlign: 'top', anclaY: 16.5, xCentro: 50 } },
+  { clave: 'corbata', patrones: ['corbata', 'corbatin', 'mono de cuello'], regla: { ancho: 12, vAlign: 'top', anclaY: 17.0, xCentro: 50 } },
+  { clave: 'reloj', patrones: ['reloj', 'pulsera', 'brazalete', 'muneca'], regla: { ancho: 10, vAlign: 'top', anclaY: 47.0, xCentro: 50 } },
+  { clave: 'cinturon', patrones: ['cinturon', 'cinto', 'faja'], regla: { ancho: 40, vAlign: 'top', anclaY: 40.0, xCentro: 50 } },
+  { clave: 'mochila', patrones: ['mochila', 'backpack'], regla: { ancho: 26, vAlign: 'top', anclaY: 28.9, xCentro: 50 } },
+  { clave: 'bolso', patrones: ['bolso', 'bolsa', 'cartera', 'clutch', 'morral'], regla: { ancho: 28, vAlign: 'top', anclaY: 45.8, xCentro: 50 } }
+];
+const RP_CLAVE_CANDIDATOS = [
+  { nombre: 'verde chroma-key', hex: '#00FF00', hue: 120 },
+  { nombre: 'magenta chroma-key', hex: '#FF00FF', hue: 300 },
+  { nombre: 'azul chroma-key', hex: '#0000FF', hue: 240 },
+  { nombre: 'cian chroma-key', hex: '#00FFFF', hue: 180 }
+];
+const RP_CATEGORIA_ALTURA_MAX = { Bolsos: 78, Accesorios: 78 };
+const RP_MANIQUI_BASE_VERSION = 'centro-2026-11-22a';
+
+function rpEsVerdadero(v) { return v === true || String(v).toLowerCase() === 'true'; }
+function rpFindPrenda(id) { return ((DATA.ropa && DATA.ropa.prendas) || []).find(p => p.ID === id); }
+function rpPrendasActivas() { return ((DATA.ropa && DATA.ropa.prendas) || []).filter(p => !rpEsVerdadero(p.Papelera)); }
+function rpNormalizarTexto(s) {
+  const normalizado = String(s || '').toLowerCase().normalize('NFD');
+  let limpio = '';
+  for (let i = 0; i < normalizado.length; i++) { const c = normalizado.charCodeAt(i); if (c < 0x0300 || c > 0x036f) limpio += normalizado[i]; }
+  return limpio;
 }
-function abrirModalPrenda() {
-  ['pNombre', 'pColor', 'pMarca', 'pTemporada'].forEach(id => document.getElementById(id).value = '');
-  const sel = document.getElementById('pCategoria');
-  sel.innerHTML = CATEGORIAS_ROPA.map(c => `<option value="${c}">${c}</option>`).join('');
-  abrirModal('modalPrenda');
+function rpClaveMoldeParaPrenda(tipo) {
+  const t = rpNormalizarTexto(tipo);
+  if (t) for (const m of RP_MOLDES_BASE) if (m.patrones.some(p => t.includes(p))) return m.clave;
+  return '';
 }
-function guardarPrenda() {
-  const tipo = document.getElementById('pNombre').value.trim();
-  if (!tipo) return;
-  conEstadoGuardando('btnGuardarPrenda', () => apiCall('saveRowRopa', {
-    table: 'PRENDAS', row: {
-      Categoria: document.getElementById('pCategoria').value, Tipo: tipo,
-      Color: document.getElementById('pColor').value, Marca: document.getElementById('pMarca').value,
-      Temporada: document.getElementById('pTemporada').value
+function rpReglaAnclaPorCategoria(cat) { return RP_ZONA_PRESET[RP_CATEGORIA_ZONA[cat]] || RP_ZONA_PRESET.arriba; }
+function rpReglaAnclaParaPrenda(categoria, tipo) {
+  const clave = rpClaveMoldeParaPrenda(tipo);
+  const m = clave && RP_MOLDES_BASE.find(x => x.clave === clave);
+  return (m && m.regla) || rpReglaAnclaPorCategoria(categoria);
+}
+function rpFotoHtml(p, opts) {
+  opts = opts || {};
+  const icono = RP_CATEGORIA_ICONO[p.Categoria] || '👕';
+  if (!p.FotoURL) return `<div style="${opts.estilo || ''};display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--card2)">${icono}</div>`;
+  const click = opts.clickable === false ? '' : ` onclick="abrirLightbox('${p.FotoURL}')"`;
+  let bbox = null;
+  if (p.BBoxJSON && p.FotoURL === p.FotoGeneradaURL) { try { bbox = JSON.parse(p.BBoxJSON); } catch (e) { } }
+  if (bbox && bbox.w > 0 && bbox.h > 0) {
+    const ratio = (bbox.w * RP_MANIQUI_CANVAS.w).toFixed(0) + '/' + (bbox.h * RP_MANIQUI_CANVAS.h).toFixed(0);
+    const imgW = (10000 / bbox.w).toFixed(2), imgH = (10000 / bbox.h).toFixed(2);
+    const left = (-(bbox.x / bbox.w) * 100).toFixed(2), top = (-(bbox.y / bbox.h) * 100).toFixed(2);
+    return `<div style="${opts.estilo || ''};position:relative;overflow:hidden;background:var(--card2);aspect-ratio:${ratio}">` +
+      `<img src="${p.FotoURL}" style="position:absolute;max-width:none;max-height:none;width:${imgW}%;height:${imgH}%;left:${left}%;top:${top}%;cursor:zoom-in"${click}></div>`;
+  }
+  return `<img src="${p.FotoURL}" style="${opts.estilo || ''}"${click}>`;
+}
+function rpFileIdDeUrlDrive(url) { const m = String(url || '').match(/[?&]id=([^&]+)/); return m ? m[1] : ''; }
+
+// ---- resize de archivo a dataURL (misma mecánica que resizeImageFile en ropa.html) ----
+function rpResizeImageFile(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) { if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve({ dataUrl, width: w, height: h, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg', canvas });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function rpCropDataUrl(sourceCanvas, width, height, caja) {
+  const [ymin, xmin, ymax, xmax] = caja;
+  const sx = Math.max(0, Math.round(xmin / 1000 * width));
+  const sy = Math.max(0, Math.round(ymin / 1000 * height));
+  const sw = Math.max(1, Math.round((xmax - xmin) / 1000 * width));
+  const sh = Math.max(1, Math.round((ymax - ymin) / 1000 * height));
+  const canvas = document.createElement('canvas');
+  canvas.width = sw; canvas.height = sh;
+  canvas.getContext('2d').drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+// ---- chroma-key: elegir color clave, quitar fondo, validar, reposicionar ----
+function rpRgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2; const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)); else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return { h, s, l };
+}
+function rpDistanciaHue(a, b) { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); }
+function rpHexToRgb(hex) { const m = hex.replace('#', ''); return { r: parseInt(m.slice(0, 2), 16), g: parseInt(m.slice(2, 4), 16), b: parseInt(m.slice(4, 6), 16) }; }
+function rpElegirColorClave(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const w = Math.min(img.width, 200);
+      const h = Math.max(1, Math.round(img.height * (w / img.width)));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+      const d = ctx.getImageData(0, 0, w, h).data;
+      const buckets = new Array(36).fill(0);
+      for (let i = 0; i < d.length; i += 4) {
+        const { h: hue, s, l } = rpRgbToHsl(d[i], d[i + 1], d[i + 2]);
+        if (s < 0.18 || l < 0.08 || l > 0.92) continue;
+        buckets[Math.floor(hue / 10) % 36]++;
+      }
+      const max = Math.max(...buckets);
+      let dominantes = [];
+      if (max > 0) buckets.forEach((count, i) => { if (count > max * 0.4) dominantes.push(i * 10 + 5); });
+      let mejor = RP_CLAVE_CANDIDATOS[0], mejorDist = -1;
+      RP_CLAVE_CANDIDATOS.forEach(cand => {
+        const distMin = dominantes.length ? Math.min(...dominantes.map(hh => rpDistanciaHue(hh, cand.hue))) : 180;
+        if (distMin > mejorDist) { mejorDist = distMin; mejor = cand; }
+      });
+      resolve(mejor);
+    };
+    img.onerror = () => resolve(RP_CLAVE_CANDIDATOS[0]);
+    img.src = dataUrl;
+  });
+}
+function rpQuitarFondoColor(dataUrl, claveHex, tolerancia) {
+  tolerancia = tolerancia || 60;
+  const key = rpHexToRgb(claveHex);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = RP_MANIQUI_CANVAS.w; canvas.height = RP_MANIQUI_CANVAS.h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = claveHex; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const escala = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const dw = img.width * escala, dh = img.height * escala;
+      ctx.drawImage(img, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imgData.data;
+      const tol2 = tolerancia * tolerancia, tolAmplia2 = tol2 * 9;
+      let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0, removidos = 0, claveResidual = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const dist2 = (r - key.r) * (r - key.r) + (g - key.g) * (g - key.g) + (b - key.b) * (b - key.b);
+        if (dist2 < tol2) { d[i + 3] = 0; removidos++; }
+        else if (dist2 < tol2 * 6) {
+          const factor = (dist2 - tol2) / (tol2 * 5);
+          d[i + 3] = Math.round(255 * factor);
+          if (key.g >= key.r && key.g >= key.b) d[i + 1] = Math.min(d[i + 1], Math.max(r, b));
+          else if (key.b >= key.r && key.b >= key.g) d[i + 2] = Math.min(d[i + 2], Math.max(r, g));
+        } else if (dist2 < tolAmplia2) claveResidual++;
+        if (d[i + 3] > 10) {
+          const px = (i / 4) % canvas.width, py = Math.floor((i / 4) / canvas.width);
+          if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py;
+        }
+      }
+      function alfaPromedioEsquina(x0, y0, x1, y1) {
+        let suma = 0, n = 0;
+        for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) { suma += d[(y * canvas.width + x) * 4 + 3]; n++; }
+        return n ? suma / n : 0;
+      }
+      const m = Math.round(Math.min(canvas.width, canvas.height) * 0.05);
+      const alfaEsquinas = (alfaPromedioEsquina(0, 0, m, m) + alfaPromedioEsquina(canvas.width - m, 0, canvas.width, m) +
+        alfaPromedioEsquina(0, canvas.height - m, m, canvas.height) + alfaPromedioEsquina(canvas.width - m, canvas.height - m, canvas.width, canvas.height)) / 4;
+      ctx.putImageData(imgData, 0, 0);
+      const totalPx = canvas.width * canvas.height;
+      const pctRemovido = removidos / totalPx, pctClaveResidual = claveResidual / totalPx;
+      const bboxPct = (maxX >= minX && maxY >= minY) ? {
+        x: (minX / canvas.width) * 100, y: (minY / canvas.height) * 100,
+        w: Math.max(1, ((maxX - minX) / canvas.width) * 100), h: Math.max(1, ((maxY - minY) / canvas.height) * 100)
+      } : { x: 0, y: 0, w: 100, h: 100 };
+      const outUrl = canvas.toDataURL('image/png');
+      resolve({ dataUrl: outUrl, base64: outUrl.split(',')[1], bboxPct, pctRemovido, pctClaveResidual, alfaEsquinas, ancho: canvas.width, alto: canvas.height });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+function rpCapaEsValida(recorte, categoria) {
+  if (!recorte) return false;
+  if (recorte.ancho !== RP_MANIQUI_CANVAS.w || recorte.alto !== RP_MANIQUI_CANVAS.h) return false;
+  if (recorte.pctRemovido <= 0.02) return false;
+  if (recorte.pctClaveResidual > 0.08) return false;
+  if (recorte.alfaEsquinas > 40) return false;
+  const areaPrenda = (recorte.bboxPct.w / 100) * (recorte.bboxPct.h / 100);
+  if (areaPrenda < 0.02) return false;
+  const alturaMax = RP_CATEGORIA_ALTURA_MAX[categoria];
+  if (alturaMax && recorte.bboxPct.h > alturaMax) return false;
+  return true;
+}
+function rpEscanearBboxAlfa(ctx, W, H) {
+  const d = ctx.getImageData(0, 0, W, H).data;
+  let minX = W, minY = H, maxX = 0, maxY = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 10) {
+    const px = (i / 4) % W, py = Math.floor((i / 4) / W);
+    if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py;
+  }
+  return (maxX >= minX && maxY >= minY) ? { x: (minX / W) * 100, y: (minY / H) * 100, w: Math.max(1, ((maxX - minX) / W) * 100), h: Math.max(1, ((maxY - minY) / H) * 100) } : { x: 0, y: 0, w: 100, h: 100 };
+}
+function rpReposicionarCapaConRegla(dataUrl, bboxPct, regla) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const W = RP_MANIQUI_CANVAS.w, H = RP_MANIQUI_CANVAS.h;
+      const bboxMinX = bboxPct.x / 100 * W, bboxMinY = bboxPct.y / 100 * H;
+      const bboxW = Math.max(1, bboxPct.w / 100 * W), bboxH = Math.max(1, bboxPct.h / 100 * H);
+      const bboxMaxY = bboxMinY + bboxH;
+      const scale = ((regla.ancho / 100) * W) / bboxW;
+      const anclaYpct = (typeof regla.anclaY === 'number') ? regla.anclaY : RP_ANCLAS[regla.anclaY];
+      const anclaYpx = (anclaYpct / 100) * H;
+      const xCentro = (typeof regla.xCentro === 'number') ? regla.xCentro / 100 : 0.5;
+      const translateX = W * xCentro - (bboxMinX + bboxW / 2) * scale;
+      const translateY = regla.vAlign === 'bottom' ? (anclaYpx - bboxMaxY * scale) : (anclaYpx - bboxMinY * scale);
+      const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(scale, 0, 0, scale, translateX, translateY);
+      ctx.drawImage(img, 0, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const bboxNuevo = rpEscanearBboxAlfa(ctx, W, H);
+      const outUrl = canvas.toDataURL('image/png');
+      resolve({ dataUrl: outUrl, base64: outUrl.split(',')[1], bboxPct: bboxNuevo });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+function rpReposicionarCapa(dataUrl, bboxPct, categoria, tipo) { return rpReposicionarCapaConRegla(dataUrl, bboxPct, rpReglaAnclaParaPrenda(categoria, tipo)); }
+
+// ---- maniquí base compartido (cacheado en localStorage + tabla MANIQUI_BASE) ----
+function rpGenero() { return localStorage.getItem('centro_rp_maniqui_genero') || 'mujer'; }
+function rpSetGenero(g) { localStorage.setItem('centro_rp_maniqui_genero', g); rpRenderPreview(); document.querySelectorAll('#rpGeneroPills .pill').forEach(p => p.classList.toggle('on', p.dataset.g === g)); }
+async function rpObtenerManiquiBase(genero) {
+  const estatura = 'chaparrita';
+  const cacheKey = 'centro_rp_maniqui_' + RP_MANIQUI_BASE_VERSION + '_' + genero + '_' + estatura;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) { try { return JSON.parse(cached); } catch (e) { } }
+  const compartido = ((DATA.ropa && DATA.ropa.maniqui_base) || []).find(m => m.Genero === genero && m.Estatura === estatura && m.Version === RP_MANIQUI_BASE_VERSION && m.URL);
+  if (compartido) {
+    const fileId = rpFileIdDeUrlDrive(compartido.URL);
+    if (fileId) {
+      const r = await apiCall('descargarImagenDrive', { fileId });
+      if (r.ok) {
+        const info = { base64: r.base64, mimeType: r.mimeType || compartido.MimeType || 'image/jpeg', url: compartido.URL };
+        try { localStorage.setItem(cacheKey, JSON.stringify(info)); } catch (e) { }
+        return info;
+      }
     }
-  })).then(res => { if (res && res.ok) { cerrarModal('modalPrenda'); cargarTodo(); } });
+  }
+  const perfil = ((DATA.ropa && DATA.ropa.perfil) || [])[0] || {};
+  const gen = await apiCall('generarManiquiBase', { genero, estatura, tonoPiel: perfil.TonoPiel || '', subtono: perfil.Subtono || '' });
+  if (!gen.ok) return null;
+  const subida = await apiCall('uploadImageRopa', { imageBase64: gen.imageBase64, mimeType: gen.mimeType || 'image/jpeg', fileName: 'maniqui-' + genero + '-' + estatura + '.jpg' });
+  const info = { base64: gen.imageBase64, mimeType: gen.mimeType || 'image/jpeg', url: subida.ok ? subida.url : '' };
+  try { localStorage.setItem(cacheKey, JSON.stringify(info)); } catch (e) { }
+  if (subida.ok) {
+    const r = await apiCall('saveRowRopa', { table: 'MANIQUI_BASE', row: { Genero: genero, Estatura: estatura, URL: subida.url, MimeType: info.mimeType, Version: RP_MANIQUI_BASE_VERSION } });
+    if (r.ok) { DATA.ropa.maniqui_base = DATA.ropa.maniqui_base || []; DATA.ropa.maniqui_base.push(r.row); }
+  }
+  return info;
 }
-function marcarUsoPrenda(id) {
+
+// ---- pipeline real: foto recortada -> capa transparente alineada ----
+async function rpCrearFilaPrenda(it, origenUrl) {
+  let fotoGeneradaUrl = '', bboxJson = '', claveColor = '';
+  const clave = await rpElegirColorClave(it.cropPreview);
+  const maniqui = await rpObtenerManiquiBase(rpGenero());
+  if (maniqui) {
+    const gen = await apiCall('generarCapaPrenda', {
+      imageBase64: it.cropPreview.split(',')[1], mimeType: 'image/jpeg',
+      categoria: it.categoria, tipo: it.tipo, color: it.color, colorSecundario: it.colorSecundario, estampado: it.estampado,
+      maniquiBase64: maniqui.base64, maniquiMimeType: maniqui.mimeType,
+      claveColorHex: clave.hex, claveColorNombre: clave.nombre, feedback: it.notaIA || ''
+    });
+    if (gen.ok) {
+      const recorte = await rpQuitarFondoColor('data:' + (gen.mimeType || 'image/jpeg') + ';base64,' + gen.imageBase64, clave.hex);
+      if (rpCapaEsValida(recorte, it.categoria)) {
+        const reposicionada = await rpReposicionarCapa(recorte.dataUrl, recorte.bboxPct, it.categoria, it.tipo);
+        const final = reposicionada || recorte;
+        const subGen = await apiCall('uploadImageRopa', { imageBase64: final.base64, mimeType: 'image/png', fileName: 'capa-' + Date.now() + '.png' });
+        if (subGen.ok) { fotoGeneradaUrl = subGen.url; bboxJson = JSON.stringify(final.bboxPct); claveColor = clave.nombre + ' ' + clave.hex; }
+      }
+    }
+  }
+  return {
+    Categoria: it.categoria || 'Ropa superior', Tipo: it.tipo || '', Color: it.color || '',
+    ColorSecundario: it.colorSecundario || '', Estampado: it.estampado || '', Marca: '', Temporada: '', Formalidad: '',
+    FotoURL: fotoGeneradaUrl || origenUrl || '', FotoGeneradaURL: fotoGeneradaUrl, BBoxJSON: bboxJson, ClaveColor: claveColor,
+    FotoRealURL: '', FotoOrigenURL: origenUrl || '', FechaAlta: new Date().toISOString(),
+    VecesUsado: 0, Favorito: false, Notas: '', Papelera: false
+  };
+}
+
+// ---- Catálogo / Vestidor: tabs ----
+let rpSection = 'catalogo';
+let rpDetections = null; // { dataUrl, width, height, canvas, items:[...] }
+function rpSetSection(sec) {
+  rpSection = sec;
+  document.querySelectorAll('#rpTabs .pill').forEach(p => p.classList.toggle('on', p.dataset.sec === sec));
+  document.getElementById('rpFab').style.display = sec === 'catalogo' ? '' : 'none';
+  rpRender();
+}
+function rpRender() {
+  if (rpSection === 'catalogo') rpRenderCatalogo(); else rpRenderVestidor();
+}
+function rpRenderCatalogo() {
+  const prendas = rpPrendasActivas();
+  const usosHoy = ((DATA.ropa && DATA.ropa.usos) || []).filter(u => u.Fecha === hoyISO());
+  const el = document.getElementById('rpContent');
+  if (!prendas.length) { el.innerHTML = '<div class="card"><div class="empty-state">Sin prendas todavía — toca ＋ para agregar tu primera foto</div></div>'; return; }
+  el.innerHTML = `<div class="card"><div class="list-row"><div class="lr-main"><span class="lr-title">Prendas registradas</span></div><span class="lr-val">${prendas.length}</span></div>
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Usadas hoy</span></div><span class="lr-val">${usosHoy.length}</span></div></div>
+    <div class="rp-grid">${prendas.map(p => `
+      <div class="rp-card" onclick="rpMarcarUso('${p.ID}')" title="Tocar = me la puse hoy">
+        ${rpFotoHtml(p, { estilo: 'width:100%;aspect-ratio:1/1;object-fit:cover', clickable: false })}
+        <div class="rp-card-body">${escapeHtml(p.Tipo || p.Categoria || '')}${p.VecesUsado ? ' · ' + p.VecesUsado : ''}</div>
+      </div>`).join('')}</div>`;
+}
+function rpMarcarUso(id) {
   apiCall('registrarUso', { prendaIds: [id], fecha: hoyISO() }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
+    showToast('✓ Marcada como usada hoy');
     cargarTodo();
+  });
+}
+
+// ---- captura: foto -> IA detecta -> revisión -> pipeline real ----
+function rpTieneCambiosPendientes() { return !!(rpDetections && rpDetections.items && rpDetections.items.length); }
+function abrirModalPrenda() {
+  rpDetections = null;
+  document.getElementById('rpCaptureArea').innerHTML = `
+    <p class="hint" style="color:var(--ink2);font-size:13px;margin-bottom:10px">Toma o elige una foto — la IA detecta cada prenda, color y tipo; tú revisas y corriges antes de guardar.</p>
+    <input type="file" accept="image/*" id="rpFotoInput" style="display:none" onchange="rpFotoSeleccionada(event)">
+    <button class="btn" onclick="document.getElementById('rpFotoInput').click()">📷 Elegir foto</button>`;
+  abrirModal('modalPrenda');
+}
+async function rpFotoSeleccionada(e) {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  const area = document.getElementById('rpCaptureArea');
+  area.innerHTML = '<p class="hint">Analizando foto con IA…</p>';
+  const resized = await rpResizeImageFile(f, 1280, 0.85);
+  const subOrigen = await apiCall('uploadImageRopa', { imageBase64: resized.base64, mimeType: resized.mimeType, fileName: 'origen-' + Date.now() + '.jpg' });
+  const r = await apiCall('extraerPrendas', { imageBase64: resized.base64, mimeType: resized.mimeType });
+  if (!r.ok) { area.innerHTML = `<p class="hint">No se pudo analizar esta foto (${escapeHtml(r.error || 'sin conexión')}).</p><button class="btn secondary" onclick="abrirModalPrenda()">Reintentar</button>`; return; }
+  rpDetections = Object.assign({}, resized, { items: (r.items || []).map(it => Object.assign({}, it)), origenUrl: subOrigen.ok ? subOrigen.url : '' });
+  rpDetections.items.forEach(it => { it.cropPreview = it.caja ? rpCropDataUrl(rpDetections.canvas, rpDetections.width, rpDetections.height, it.caja) : rpDetections.dataUrl; });
+  rpRenderRevision();
+}
+function rpRenderRevision() {
+  const d = rpDetections;
+  const area = document.getElementById('rpCaptureArea');
+  if (!d.items.length) { area.innerHTML = '<p class="hint">No se detectaron prendas claras en esta foto.</p><button class="btn secondary" onclick="abrirModalPrenda()">Intentar con otra foto</button>'; return; }
+  area.innerHTML = `<p class="hint" style="margin-bottom:8px">Revisa y corrige antes de guardar:</p>` +
+    d.items.map((it, i) => `
+      <div class="rp-detect-card" style="display:flex;gap:10px">
+        <img src="${it.cropPreview || d.dataUrl}">
+        <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+          <select onchange="rpDetections.items[${i}].categoria=this.value">${CATEGORIAS_ROPA.map(c => `<option ${c === it.categoria ? 'selected' : ''}>${c}</option>`).join('')}</select>
+          <input value="${escapeHtml(it.tipo || '')}" placeholder="Tipo" oninput="rpDetections.items[${i}].tipo=this.value" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <div style="display:flex;gap:5px">
+            <input value="${escapeHtml(it.color || '')}" placeholder="Color" oninput="rpDetections.items[${i}].color=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+            <input value="${escapeHtml(it.colorSecundario || '')}" placeholder="Color 2" oninput="rpDetections.items[${i}].colorSecundario=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          </div>
+        </div>
+        <button class="btn btn-sec btn-sm" onclick="rpQuitarDeteccion(${i})" title="No incluir">✕</button>
+      </div>`).join('') +
+    `<div class="modal-actions"><button class="btn" id="rpBtnGuardarDetecciones" onclick="rpGuardarDetecciones()">Guardar prenda${d.items.length > 1 ? 's' : ''}</button></div>`;
+}
+function rpQuitarDeteccion(i) { rpDetections.items.splice(i, 1); rpRenderRevision(); }
+async function rpGuardarDetecciones() {
+  const d = rpDetections;
+  const btn = document.getElementById('rpBtnGuardarDetecciones');
+  const area = document.getElementById('rpCaptureArea');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  const items = d.items; let guardadas = 0;
+  for (const it of items) {
+    area.querySelector('.hint') && (area.querySelector('.hint').textContent = `Generando capa ${guardadas + 1}/${items.length}…`);
+    const row = await rpCrearFilaPrenda(it, d.origenUrl);
+    const r = await apiCall('saveRowRopa', { table: 'PRENDAS', row });
+    if (r.ok) {
+      DATA.ropa.prendas = DATA.ropa.prendas || []; DATA.ropa.prendas.push(r.row);
+      await apiCall('registrarUso', { prendaIds: [r.row.ID], fecha: hoyISO() });
+      guardadas++;
+    }
+  }
+  rpDetections = null;
+  showToast(guardadas ? `✓ ${guardadas} prenda${guardadas > 1 ? 's' : ''} guardada${guardadas > 1 ? 's' : ''}` : 'No se pudo guardar ninguna prenda');
+  cerrarModal('modalPrenda');
+  cargarTodo();
+}
+
+// ---- Vestidor: armador por capas sobre el maniquí compartido ----
+let rpOutfitBoard = null;
+function rpRenderVestidor() {
+  const el = document.getElementById('rpContent');
+  if (!rpOutfitBoard) {
+    const inicial = [];
+    ['Ropa inferior', 'Ropa superior', 'Vestidos', 'Calzado'].forEach(cat => {
+      const items = rpPrendasActivas().filter(p => p.Categoria === cat && p.FotoGeneradaURL);
+      if (items.length) inicial.push(items[0].ID);
+    });
+    rpOutfitBoard = { capas: inicial };
+  } else {
+    rpOutfitBoard.capas = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
+  }
+  const genero = rpGenero();
+  el.innerHTML = `
+    <div class="pill-group" id="rpGeneroPills" style="margin-bottom:10px">
+      <span class="pill ${genero === 'mujer' ? 'on' : ''}" data-g="mujer" onclick="rpSetGenero('mujer')">Mujer</span>
+      <span class="pill ${genero === 'hombre' ? 'on' : ''}" data-g="hombre" onclick="rpSetGenero('hombre')">Hombre</span>
+    </div>
+    <div class="rp-doll-wrap" id="rpDollWrap"><p class="hint" style="padding:60px 0;text-align:center">Cargando maniquí…</p></div>
+    <div id="rpCapasLista" style="margin-top:10px"></div>
+    <button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="rpAbrirAgregarCapa()">➕ Agregar prenda al outfit</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn" onclick="rpUsarOutfitHoy()">Usar este outfit hoy</button>
+      <button class="btn btn-sec" onclick="rpGuardarOutfit()">💾 Guardar outfit</button>
+    </div>`;
+  rpRenderPreview();
+  rpRenderCapasLista();
+}
+async function rpRenderPreview() {
+  const cont = document.getElementById('rpDollWrap');
+  if (!cont) return;
+  const maniqui = await rpObtenerManiquiBase(rpGenero());
+  if (!document.getElementById('rpDollWrap')) return;
+  if (!maniqui || !maniqui.url) { cont.innerHTML = '<p class="hint" style="padding:40px 0;text-align:center">No se pudo generar el maniquí.</p>'; return; }
+  const capasHtml = rpOutfitBoard.capas.map(id => {
+    const p = rpFindPrenda(id);
+    return (p && p.FotoGeneradaURL) ? `<img class="rp-doll-img" src="${p.FotoGeneradaURL}" onclick="abrirLightbox('${p.FotoGeneradaURL}')">` : '';
+  }).join('');
+  cont.innerHTML = `<img class="rp-doll-img" src="${maniqui.url}">` + capasHtml;
+}
+function rpRenderCapasLista() {
+  const cont = document.getElementById('rpCapasLista');
+  if (!cont) return;
+  if (!rpOutfitBoard.capas.length) { cont.innerHTML = '<p class="hint">Todavía no agregaste ninguna prenda a este outfit.</p>'; return; }
+  cont.innerHTML = '<p class="hint" style="margin-bottom:6px">Orden de las capas (la de más arriba tapa a las de abajo):</p>' +
+    rpOutfitBoard.capas.slice().reverse().map(id => {
+      const idx = rpOutfitBoard.capas.indexOf(id);
+      const esUltimo = idx === rpOutfitBoard.capas.length - 1, esPrimero = idx === 0;
+      const p = rpFindPrenda(id); if (!p) return '';
+      return `<div class="rp-capa-row">
+        ${rpFotoHtml(p, { estilo: 'height:40px;border-radius:8px', clickable: false })}
+        <div style="flex:1;font-size:12.5px">${escapeHtml(p.Tipo || p.Categoria || '')}</div>
+        <button class="btn btn-sec btn-sm" ${esUltimo ? 'disabled' : ''} onclick="rpMoverCapa('${id}',1)">▲</button>
+        <button class="btn btn-sec btn-sm" ${esPrimero ? 'disabled' : ''} onclick="rpMoverCapa('${id}',-1)">▼</button>
+        <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="rpQuitarCapa('${id}')">🗑</button>
+      </div>`;
+    }).join('');
+}
+function rpMoverCapa(id, delta) {
+  const idx = rpOutfitBoard.capas.indexOf(id); if (idx < 0) return;
+  const nuevo = idx + delta; if (nuevo < 0 || nuevo >= rpOutfitBoard.capas.length) return;
+  [rpOutfitBoard.capas[idx], rpOutfitBoard.capas[nuevo]] = [rpOutfitBoard.capas[nuevo], rpOutfitBoard.capas[idx]];
+  rpRenderPreview(); rpRenderCapasLista();
+}
+function rpQuitarCapa(id) { rpOutfitBoard.capas = rpOutfitBoard.capas.filter(x => x !== id); rpRenderPreview(); rpRenderCapasLista(); }
+function rpAbrirAgregarCapa() {
+  const candidatos = rpPrendasActivas().filter(p => p.FotoGeneradaURL && !rpOutfitBoard.capas.includes(p.ID));
+  if (!candidatos.length) { showToast('No tienes más prendas con capa lista para agregar'); return; }
+  finAbrirVincular('Agregar prenda al outfit', 'Elige una prenda de tu catálogo', candidatos,
+    p => ({ id: p.ID, texto: `${RP_CATEGORIA_ICONO[p.Categoria] || '👕'} ${escapeHtml(p.Tipo || p.Categoria)}${p.Color ? ' · ' + escapeHtml(p.Color) : ''}` }),
+    id => { rpOutfitBoard.capas.push(id); rpRenderPreview(); rpRenderCapasLista(); });
+}
+function rpUsarOutfitHoy() {
+  if (!rpOutfitBoard.capas.length) { showToast('Agrega al menos una prenda'); return; }
+  apiCall('registrarUso', { prendaIds: rpOutfitBoard.capas, fecha: hoyISO() }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    showToast('✓ Outfit registrado como usado hoy');
+    cargarTodo();
+  });
+}
+function rpGuardarOutfit() {
+  if (!rpOutfitBoard.capas.length) { showToast('Agrega al menos una prenda'); return; }
+  const nota = prompt('¿Notas para este outfit? (opcional)') || '';
+  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: hoyISO(), PrendaIDsJSON: JSON.stringify(rpOutfitBoard.capas), Motivo: nota, Papelera: false } }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    showToast('✓ Outfit guardado');
   });
 }
 
