@@ -231,10 +231,24 @@ a{color:var(--accent)}
     <div class="pill-group" id="sesPills" style="margin-bottom:10px"></div>
     <div class="card hidden" id="sesVeredicto" style="font-size:13px"></div>
     <div class="card" id="resumenGastos"></div>
-    <button class="btn btn-sec btn-sm" style="width:100%;margin-bottom:12px" onclick="finOpen()">💳 Finanzas personales (vault)</button>
+    <div class="fin-row-actions" style="margin-bottom:12px">
+      <button class="btn btn-sec btn-sm" onclick="finOpen()">💳 Finanzas (vault)</button>
+      <button class="btn btn-sec btn-sm" onclick="lisAbrir()">🛒 Lista de compras</button>
+    </div>
     <div class="section-title">Movimientos</div>
     <div class="card" id="listaGastos"><div class="loading">Cargando…</div></div>
     <button class="fab" onclick="abrirModalGasto()">+</button>
+  </div>
+
+  <!-- ---- LISTA DE COMPRAS ---- -->
+  <div class="view" id="view-lista">
+    <div class="card">
+      <div style="display:flex;gap:6px">
+        <input id="lisNuevoItem" type="text" placeholder="Agregar a la lista..." style="flex:1;padding:11px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink)" onkeydown="if(event.key==='Enter')lisAgregar()">
+        <button class="btn btn-sm" style="width:auto" onclick="lisAgregar()">＋</button>
+      </div>
+    </div>
+    <div class="card" id="listaCompras"><div class="loading">Cargando…</div></div>
   </div>
 
   <!-- ---- FINANZAS PERSONALES (vault de Gastos — transplante real) ---- -->
@@ -592,7 +606,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Quinta piedra — sesiones compartidas en Gastos';
+const VERSION_APP = 'Sexta piedra — lista de compras';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -775,7 +789,7 @@ function irAVista(nombre) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + nombre).classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === nombre));
-  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', finanzas: 'Finanzas', config: 'Configuración' };
+  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', finanzas: 'Finanzas', lista: 'Lista de compras', config: 'Configuración' };
   document.getElementById('topbarTitle').textContent = titulos[nombre] || nombre;
 }
 function abrirConfig() { irAVista('config'); }
@@ -3199,6 +3213,57 @@ function notaEliminar(id) {
     apiCall('saveRowOrg', { table: 'NOTAS', row }).then(() => notaCargar());
   });
 }
+
+// ============================================================================
+// LISTA DE COMPRAS — transplante real de getShopping/saveShopping (ya en
+// Gastos.js), limitado a UNA lista por sesión (sin el catálogo de varias
+// listas con nombre ni "grupos" de sesiones compartiendo lista — eso es la
+// siguiente pieza). Vive sobre la misma sesión activa de Gastos (sesActiva).
+// ============================================================================
+let lisItems = [];
+function lisAbrir() { irAVista('lista'); lisCargar(); }
+async function lisCargar() {
+  const r = await apiCall('getShopping', { sesion: sesActiva || '', listaId: '', esDefault: true });
+  lisItems = (r && r.items) || [];
+  lisRender();
+}
+function lisRowHTML(it, idx) {
+  return `<div class="list-row">
+    <div class="lr-main" style="cursor:pointer" onclick="lisToggle(${idx})">
+      <span class="lr-title" style="${it.done ? 'text-decoration:line-through;color:var(--ink3)' : ''}">${it.done ? '✓ ' : '☐ '}${escapeHtml(it.item)}</span>
+      <span class="lr-sub">${[it.depto, it.tienda, it.quien].filter(Boolean).map(escapeHtml).join(' · ')}</span>
+    </div>
+    <span><button class="fin-mini-btn" onclick="lisEditar(${idx})">✏️</button><button class="fin-mini-btn danger" onclick="lisEliminar(${idx})">🗑</button></span>
+  </div>`;
+}
+function lisRender() {
+  const cont = document.getElementById('listaCompras');
+  const pend = [], hechos = [];
+  lisItems.forEach((it, idx) => { (it.done ? hechos : pend).push(lisRowHTML(it, idx)); });
+  cont.innerHTML = (pend.join('') || '<div class="empty-state">Sin pendientes — ¡lista limpia!</div>') +
+    (hechos.length ? `<details class="fin-details" style="margin-top:8px"><summary>✓ Comprado (${hechos.length})</summary>${hechos.join('')}</details>` : '');
+}
+function lisAgregar() {
+  const txt = document.getElementById('lisNuevoItem').value.trim();
+  if (!txt) return;
+  lisItems.push({ done: false, item: txt, depto: '', quien: '', tienda: '', sesion: sesActiva || '', alcance: 'solo', listaId: '' });
+  document.getElementById('lisNuevoItem').value = '';
+  lisRender();
+  lisGuardar();
+}
+function lisToggle(idx) { lisItems[idx].done = !lisItems[idx].done; lisRender(); lisGuardar(); }
+function lisEditar(idx) {
+  const it = lisItems[idx];
+  const depto = prompt('Departamento (ej. Alacena, Farmacia):', it.depto || ''); if (depto === null) return;
+  const tienda = prompt('Tienda (opcional):', it.tienda || ''); if (tienda === null) return;
+  const quien = prompt('¿Para quién? (opcional):', it.quien || ''); if (quien === null) return;
+  it.depto = depto.trim(); it.tienda = tienda.trim(); it.quien = quien.trim();
+  lisRender(); lisGuardar();
+}
+function lisEliminar(idx) {
+  pedirConfirmacion('Eliminar', '¿Quitar "' + lisItems[idx].item + '" de la lista?', () => { lisItems.splice(idx, 1); lisRender(); lisGuardar(); });
+}
+function lisGuardar() { apiCall('saveShopping', { sesion: sesActiva || '', listaId: '', esDefault: true, items: lisItems }); }
 </script>
 </body>
 </html>
