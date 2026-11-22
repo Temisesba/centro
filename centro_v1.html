@@ -243,22 +243,12 @@ a{color:var(--accent)}
       <div class="list-row"><div class="lr-main"><span class="lr-title">Respaldo</span></div>
         <button class="btn btn-sec btn-sm" onclick="exportarRespaldo()">Exportar</button></div>
     </div>
-    <div class="section-title">Tarjetas</div>
-    <div class="card" id="listaTarjetas"></div>
-    <button class="btn btn-sec" onclick="abrirModalTarjeta()" style="margin-top:8px">+ Agregar tarjeta</button>
-
-    <div class="section-title">Categorías de inventario</div>
-    <div class="card" id="listaCategoriasInv"></div>
-    <button class="btn btn-sec" onclick="abrirModalCategoriaInv()" style="margin-top:8px">+ Agregar categoría</button>
-
     <div class="section-title">Mejoras</div>
     <div class="card">
       <textarea id="inpMejoraTexto" placeholder="Idea, queja, algo que se me ocurra..." style="width:100%;min-height:50px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px;background:var(--card2);color:var(--ink)"></textarea>
       <button class="btn" style="margin-top:8px" onclick="agregarMejora()">Agregar</button>
       <div id="listaMejoras" style="margin-top:10px"></div>
     </div>
-    <div class="section-title">Papelera</div>
-    <div class="card" id="listaPapelera"></div>
   </div>
 
   <div class="tabbar">
@@ -291,7 +281,7 @@ a{color:var(--accent)}
     <div class="field"><label>Costo</label><input id="gCosto" type="number" step="0.01"></div>
     <div class="field"><label>Moneda</label><input id="gMoneda" type="text" value="MXN"></div>
     <div class="field"><label>Tienda</label><input id="gTienda" type="text"></div>
-    <div class="field"><label>Tarjeta / pago</label><select id="gTarjeta"></select></div>
+    <div class="field"><label>Pago (efectivo, tarjeta...)</label><input id="gPago" type="text" placeholder="Efectivo, Santander..."></div>
     <div class="field"><label>Fecha</label><input id="gFecha" type="date"></div>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="intentarCerrarModal('modalGasto')">Cancelar</button>
@@ -300,46 +290,22 @@ a{color:var(--accent)}
   </div>
 </div>
 
-<!-- ============ MODAL: item/carpeta de inventario ============ -->
+<!-- ============ MODAL: item de inventario ============ -->
 <div id="modalInventario" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalInventario')">
   <div class="modal-sheet">
-    <div class="modal-title" id="invModalTitulo">Nuevo en inventario</div>
-    <div class="pill-group" style="margin-bottom:12px">
-      <span class="pill on" id="pillItem" onclick="setTipoInventario(false)">Objeto</span>
-      <span class="pill" id="pillCarpeta" onclick="setTipoInventario(true)">Carpeta / ubicación</span>
-    </div>
+    <div class="modal-title">Nuevo en inventario</div>
     <div class="field"><label>Nombre</label><input id="invNombre" type="text"></div>
-    <div class="field" id="campoCategoriaInv"><label>Categoría</label><select id="invCategoria"></select></div>
-    <div class="field" id="campoCantidadInv"><label>Cantidad</label><input id="invCantidad" type="text"></div>
+    <div class="field"><label>Grupo</label>
+      <div class="pill-group">
+        <span class="pill on" id="pillAlacena" onclick="elegirGrupoInv('Alacena')">Alacena</span>
+        <span class="pill" id="pillGeneral" onclick="elegirGrupoInv('General')">General</span>
+      </div>
+    </div>
+    <div class="field"><label>Ubicación (ej. Alacena/Cajón chico/Caja de galletas)</label><input id="invUbicacion" type="text"></div>
+    <div class="field"><label>Cantidad</label><input id="invCantidad" type="text"></div>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="intentarCerrarModal('modalInventario')">Cancelar</button>
       <button class="btn" id="btnGuardarInventario" onclick="guardarInventario()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ MODAL: tarjeta ============ -->
-<div id="modalTarjeta" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalTarjeta')">
-  <div class="modal-sheet">
-    <div class="modal-title">Nueva tarjeta</div>
-    <div class="field"><label>Nombre</label><input id="tNombre" type="text" placeholder="Santander Oro"></div>
-    <div class="field"><label>Banco</label><input id="tBanco" type="text"></div>
-    <div class="modal-actions">
-      <button class="btn btn-sec" onclick="cerrarModal('modalTarjeta')">Cancelar</button>
-      <button class="btn" onclick="guardarTarjeta()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============ MODAL: categoría inventario ============ -->
-<div id="modalCategoriaInv" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalCategoriaInv')">
-  <div class="modal-sheet">
-    <div class="modal-title">Nueva categoría</div>
-    <div class="field"><label>Nombre</label><input id="cNombre" type="text" placeholder="Ropa, Alacena, Mueble, Papelería..."></div>
-    <div class="field"><label>Emoji</label><input id="cEmoji" type="text" placeholder="📦"></div>
-    <div class="modal-actions">
-      <button class="btn btn-sec" onclick="cerrarModal('modalCategoriaInv')">Cancelar</button>
-      <button class="btn" onclick="guardarCategoriaInv()">Guardar</button>
     </div>
   </div>
 </div>
@@ -348,7 +314,8 @@ a{color:var(--accent)}
 <div id="modalPrenda" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalPrenda')">
   <div class="modal-sheet">
     <div class="modal-title">Nueva prenda</div>
-    <div class="field"><label>Nombre / tipo</label><input id="pNombre" type="text" placeholder="Chamarra azul"></div>
+    <div class="field"><label>Categoría</label><select id="pCategoria"></select></div>
+    <div class="field"><label>Tipo</label><input id="pNombre" type="text" placeholder="Chamarra"></div>
     <div class="ia-row">
       <div class="field"><label>Color</label><input id="pColor" type="text"></div>
       <div class="field"><label>Marca</label><input id="pMarca" type="text"></div>
@@ -410,16 +377,25 @@ a{color:var(--accent)}
 
 // ============================================================================
 // ESTADO
+// Importante: a partir de esta versión el backend YA NO es un esquema nuevo
+// inventado — es el código REAL de cada app (Gastos/Ropa/Acuerdos/Comidas/
+// App_Completa) transplantado tal cual a un solo proyecto de Apps Script, con
+// un router compartido. Por eso aquí abajo se llaman las acciones y nombres
+// de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
+// "quien_paga", no un esquema genérico inventado).
 // ============================================================================
 const VERSION_APP = 'Primera piedra';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
-let DATA = null; // caché de getAllData
-let invPadreActual = ''; // carpeta actual en la vista de inventario (ID o '' = raíz)
-let invCategoriaFiltro = '';
-let tipoInventarioEsCarpeta = false;
+let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
+let invRutaActual = ''; // ruta actual en inventario, ej. "Alacena/Cajón chico" ('' = raíz)
+let invGrupoFiltro = '';
+let invGrupoNuevo = 'Alacena';
 let iaUltimaRespuesta = null;
-let modalStack = []; // para el botón atrás de Android
+let modalStack = [];
+let suprimirPopstate = false;
+
+const CATEGORIAS_ROPA = ['Calzado', 'Ropa superior', 'Ropa inferior', 'Vestidos', 'Abrigos', 'Accesorios', 'Bolsos', 'Ropa interior', 'Deportiva'];
 
 // ============================================================================
 // API
@@ -453,11 +429,13 @@ function guardarWebAppUrl() {
   cargarPantallaUsuarios();
 }
 
+// USUARIOS vive en la tabla compartida de Acuerdos/App_Completa/Comidas (mismo
+// esquema ID|Nombre|Password|Papelera) — se usa la acción de Acuerdos como dueña.
 function cargarPantallaUsuarios() {
   mostrarPantalla('screenUsuario');
   const errorDiv = document.getElementById('errorConexionUsuarios');
   errorDiv.classList.add('hidden');
-  apiCall('listarUsuarios').then(res => {
+  apiCall('getAllAcuerdos').then(res => {
     const cont = document.getElementById('listaUsuarios');
     cont.innerHTML = '';
     if (!res.ok) {
@@ -467,13 +445,14 @@ function cargarPantallaUsuarios() {
       document.getElementById('btnMostrarNuevoUsuario').classList.add('hidden');
       return;
     }
-    if (!res.usuarios.length) {
+    const usuarios = (res.data.usuarios || []).filter(u => !(u.Papelera === true || String(u.Papelera).toLowerCase() === 'true'));
+    if (!usuarios.length) {
       document.getElementById('formNuevoUsuario').classList.remove('hidden');
       document.getElementById('btnMostrarNuevoUsuario').classList.add('hidden');
       return;
     }
     document.getElementById('btnMostrarNuevoUsuario').classList.remove('hidden');
-    res.usuarios.forEach(u => {
+    usuarios.forEach(u => {
       const div = document.createElement('div');
       div.className = 'user-chip';
       div.innerHTML = `<div class="user-avatar">${(u.Nombre || '?')[0].toUpperCase()}</div><span>${escapeHtml(u.Nombre)}</span>`;
@@ -494,24 +473,20 @@ function cambiarConexionDesdeInicio() {
 }
 
 function seleccionarUsuario(u) {
-  if (u.TieneClave) {
+  if (u.Password) {
     const pass = prompt('Contraseña de ' + u.Nombre + ':');
-    apiCall('loginUsuario', { id: u.ID, password: pass }).then(res => {
-      if (!res.ok) { alert(res.error === 'PASSWORD' ? 'Contraseña incorrecta' : res.error); return; }
-      guardarUsuarioYEntrar(res.usuario);
-    });
-  } else {
-    guardarUsuarioYEntrar({ ID: u.ID, Nombre: u.Nombre });
+    if (String(pass || '') !== String(u.Password)) { alert('Contraseña incorrecta'); return; }
   }
+  guardarUsuarioYEntrar({ ID: u.ID, Nombre: u.Nombre });
 }
 
 function crearUsuarioInicial() {
   const nombre = document.getElementById('inpNuevoNombre').value.trim();
   if (!nombre) return;
   const pass = document.getElementById('inpNuevaPass').value;
-  apiCall('crearOEditarUsuario', { usuario: { Nombre: nombre, Password: pass } }).then(res => {
+  apiCall('saveRowAcuerdos', { table: 'USUARIOS', row: { Nombre: nombre, Password: pass } }).then(res => {
     if (!res.ok) { alert(res.error); return; }
-    guardarUsuarioYEntrar(res.row);
+    guardarUsuarioYEntrar({ ID: res.row.ID, Nombre: nombre });
   });
 }
 
@@ -537,7 +512,6 @@ function cambiarConexion() {
   document.getElementById('conexionUrlTexto').textContent = limpia;
   probarConexion();
 }
-
 function probarConexion() {
   apiCall('ping').then(res => {
     if (res && res.ok) alert('✓ Conexión OK');
@@ -554,15 +528,29 @@ function iniciarApp() {
 }
 
 function cargarTodo() {
-  apiCall('getAllData').then(res => {
-    if (!res.ok) { alert('Error cargando datos: ' + res.error); return; }
-    DATA = res.data;
-    localStorage.setItem('centro_ultimo_data', JSON.stringify(DATA)); // último dato bueno, para ver offline
-    renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig();
+  Promise.all([
+    apiCall('getGastos'),
+    apiCall('getAllRopa'),
+    apiCall('getAllAcuerdos'),
+    apiCall('getAllComidas'),
+    apiCall('getAllAppCompleta')
+  ]).then(([gastosRes, ropaRes, acuerdosRes, comidasRes, appCompletaRes]) => {
+    DATA = {
+      gastos: gastosRes.gastos || [],
+      ropa: (ropaRes.data || {}),
+      acuerdos: (acuerdosRes.data || {}),
+      comidas: (comidasRes.data || {}),
+      appCompleta: (appCompletaRes.data || {})
+    };
+    localStorage.setItem('centro_ultimo_data', JSON.stringify(DATA));
+    renderTodo();
   }).catch(() => {
     const cache = localStorage.getItem('centro_ultimo_data');
-    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig(); }
+    if (cache) { DATA = JSON.parse(cache); renderTodo(); }
   });
+}
+function renderTodo() {
+  renderInicio(); renderGastos(); renderInventario(); renderRopa(); renderComidas(); renderAcuerdos(); renderConfig();
 }
 
 function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -571,7 +559,7 @@ function money(n, moneda) { n = Number(n) || 0; return n.toLocaleString('es-MX',
 function hoyISO() { return new Date().toISOString().slice(0, 10); }
 
 // ============================================================================
-// NAVEGACIÓN entre vistas + tabs
+// NAVEGACIÓN
 // ============================================================================
 function irAVista(nombre) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -583,9 +571,8 @@ function irAVista(nombre) {
 function abrirConfig() { irAVista('config'); }
 
 // ============================================================================
-// MODALES — botón atrás de Android cierra el modal, no sale de la app (BASES_APPS)
+// MODALES — botón atrás de Android cierra el modal, no sale de la app
 // ============================================================================
-let suprimirPopstate = false; // evita re-procesar el popstate que generamos nosotros mismos al cerrar por botón
 function abrirModal(id) {
   document.getElementById(id).classList.remove('hidden');
   modalStack.push(id);
@@ -594,18 +581,18 @@ function abrirModal(id) {
 function cerrarModal(id) {
   document.getElementById(id).classList.add('hidden');
   const i = modalStack.indexOf(id);
-  if (i === -1) return; // ya se había cerrado (ej. por el back del celular)
+  if (i === -1) return;
   modalStack.splice(i, 1);
   suprimirPopstate = true;
-  history.back(); // consume la entrada que abrirModal empujó, para no desincronizar el historial
+  history.back();
 }
 function intentarCerrarModal(id, hayCambios) {
-  if (hayCambios === undefined) hayCambios = true; // conservador: pregunta si no se sabe
+  if (hayCambios === undefined) hayCambios = true;
   if (hayCambios && !confirm('¿Cerrar sin guardar los cambios?')) return;
   cerrarModal(id);
 }
 window.addEventListener('popstate', () => {
-  if (suprimirPopstate) { suprimirPopstate = false; return; } // este popstate ya lo provocamos nosotros
+  if (suprimirPopstate) { suprimirPopstate = false; return; }
   if (modalStack.length) {
     const top = modalStack.pop();
     document.getElementById(top).classList.add('hidden');
@@ -620,7 +607,7 @@ function pedirConfirmacion(titulo, texto, onOk) {
 }
 
 // ============================================================================
-// BOTÓN GUARDAR con estados (BASES_APPS §3)
+// BOTÓN GUARDAR con estados
 // ============================================================================
 function conEstadoGuardando(btnId, promesaFn) {
   const btn = document.getElementById(btnId);
@@ -637,16 +624,16 @@ function conEstadoGuardando(btnId, promesaFn) {
 // INICIO — cuadro de IA de texto libre
 // ============================================================================
 function renderInicio() {
-  const gastosHoy = (DATA.GASTOS || []).filter(g => g.Fecha === hoyISO());
-  const totalHoy = gastosHoy.reduce((s, g) => s + (Number(g.Costo) || 0), 0);
-  const usosHoy = (DATA.USO_ROPA || []).filter(u => u.Fecha === hoyISO()).length;
+  const gastosHoy = (DATA.gastos || []).filter(g => g.fecha === hoyISO() && g.tipoFila !== 'producto');
+  const totalHoy = gastosHoy.reduce((s, g) => s + (Number(g.costo) || 0), 0);
+  const usosHoy = ((DATA.ropa && DATA.ropa.usos) || []).filter(u => u.Fecha === hoyISO()).length;
   document.getElementById('resumenHoy').innerHTML = `
     <div class="list-row"><div class="lr-main"><span class="lr-title">Gastado hoy</span></div><span class="lr-val">${money(totalHoy)}</span></div>
     <div class="list-row"><div class="lr-main"><span class="lr-title">Prendas usadas hoy</span></div><span class="lr-val">${usosHoy}</span></div>
   `;
 }
 
-const ETIQUETAS_TIPO_IA = { gasto_compra: '💰 Gasto / compra', uso_prenda: '👔 Uso de prenda', nota: '📝 Nota', acuerdo: '🤝 Acuerdo', comida: '🍽️ Comida', evento_viaje: '✈️ Evento de viaje' };
+const ETIQUETAS_TIPO_IA = { gasto_compra: '💰 Gasto / compra', uso_prenda: '👔 Uso de prenda', nota: '📝 Nota', acuerdo: '🤝 Acuerdo', comida: '🍽️ Comida' };
 
 function enviarTextoIA() {
   const texto = document.getElementById('iaTexto').value.trim();
@@ -660,7 +647,6 @@ function enviarTextoIA() {
     mostrarResultadoIA(res);
   });
 }
-
 function mostrarResultadoIA(res) {
   const campos = res.campos || {};
   let camposHtml = '';
@@ -675,7 +661,6 @@ function mostrarResultadoIA(res) {
       <button class="btn btn-sm" style="width:100%;margin-top:6px" onclick="confirmarResultadoIA()">Guardar</button>
     </div>`;
 }
-
 function confirmarResultadoIA() {
   const campos = Object.assign({}, iaUltimaRespuesta.campos);
   document.querySelectorAll('#iaResultado [data-campo]').forEach(inp => { campos[inp.dataset.campo] = inp.value; });
@@ -688,138 +673,133 @@ function confirmarResultadoIA() {
 }
 
 // ============================================================================
-// GASTOS
+// GASTOS — acciones reales de Gastos.js (getGastos/saveGasto/updateGasto/deleteGasto)
 // ============================================================================
 function renderGastos() {
-  const gastos = (DATA.GASTOS || []).slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
-  const totalMes = gastos.filter(g => String(g.Fecha).slice(0, 7) === hoyISO().slice(0, 7)).reduce((s, g) => s + (Number(g.Costo) || 0), 0);
+  const gastos = (DATA.gastos || []).filter(g => g.tipoFila !== 'producto').slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const totalMes = gastos.filter(g => String(g.fecha).slice(0, 7) === hoyISO().slice(0, 7)).reduce((s, g) => s + (Number(g.costo) || 0), 0);
   document.getElementById('resumenGastos').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Este mes</span></div><span class="lr-val">${money(totalMes)}</span></div>`;
   const cont = document.getElementById('listaGastos');
   if (!gastos.length) { cont.innerHTML = '<div class="empty-state">Sin gastos todavía</div>'; return; }
   cont.innerHTML = gastos.slice(0, 50).map(g => `
     <div class="list-row">
-      <div class="lr-main"><span class="lr-title">${escapeHtml(g.Concepto || '(sin concepto)')}</span><span class="lr-sub">${escapeHtml(g.Fecha || '')} · ${escapeHtml(g.Tienda || '')}</span></div>
-      <span class="lr-val">${money(g.Costo, g.Moneda)}</span>
+      <div class="lr-main"><span class="lr-title">${escapeHtml(g.concepto || '(sin concepto)')}</span><span class="lr-sub">${escapeHtml(g.fecha || '')} · ${escapeHtml(g.tienda || '')}</span></div>
+      <span class="lr-val">${money(g.costo, g.moneda)}</span>
     </div>`).join('');
 }
-
 function abrirModalGasto() {
   document.getElementById('gConcepto').value = '';
   document.getElementById('gCosto').value = '';
   document.getElementById('gMoneda').value = 'MXN';
   document.getElementById('gTienda').value = '';
+  document.getElementById('gPago').value = '';
   document.getElementById('gFecha').value = hoyISO();
-  const sel = document.getElementById('gTarjeta');
-  sel.innerHTML = '<option value="">Efectivo / sin especificar</option>' + (DATA.TARJETAS || []).map(t => `<option value="${t.ID}">${escapeHtml(t.Nombre)}</option>`).join('');
   abrirModal('modalGasto');
 }
-
 function guardarGasto() {
-  conEstadoGuardando('btnGuardarGasto', () => apiCall('saveRow', {
-    table: 'GASTOS', row: {
-      Concepto: document.getElementById('gConcepto').value,
-      Costo: document.getElementById('gCosto').value,
-      Moneda: document.getElementById('gMoneda').value || 'MXN',
-      Tienda: document.getElementById('gTienda').value,
-      TarjetaId: document.getElementById('gTarjeta').value,
-      Fecha: document.getElementById('gFecha').value,
-      FechaCaptura: new Date().toISOString(),
-      QuienCompra: usuarioActual.Nombre
-    }
+  conEstadoGuardando('btnGuardarGasto', () => apiCall('saveGasto', {
+    concepto: document.getElementById('gConcepto').value,
+    costo: document.getElementById('gCosto').value,
+    moneda: document.getElementById('gMoneda').value || 'MXN',
+    tienda: document.getElementById('gTienda').value,
+    pago: document.getElementById('gPago').value,
+    fecha: document.getElementById('gFecha').value,
+    quien_paga: usuarioActual.Nombre
   })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); cargarTodo(); } });
 }
 
 // ============================================================================
-// INVENTARIO — árbol anidado (Alacena > Cajón chico > Caja de galletas > Hilo)
+// INVENTARIO — productos de Gastos (Grupo Alacena/General) + Inventario
+// General de App_Completa. "Ubicación" es una ruta de texto libre
+// ("Alacena/Cajón chico/Caja de galletas") — las carpetas nacen solas de esa
+// ruta, no hay una acción separada para "crear carpeta".
 // ============================================================================
+function itemsInventario() {
+  const deGastos = (DATA.gastos || []).filter(g => g.tipoFila === 'producto' && g.grupo !== 'Ropa').map(g => ({
+    nombre: g.concepto, ubicacion: g.ubicacion || '', grupo: g.grupo || 'Alacena', cantidad: g.cantidad, foto: g.fotoProducto, origen: 'gastos', ref: g.rowIndex
+  }));
+  const deAppCompleta = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).map(i => ({
+    nombre: i.Nombre, ubicacion: i.Ubicacion || '', grupo: 'General', cantidad: i.Cantidad, foto: i.FotoURL, origen: 'appCompleta', ref: i.ID
+  }));
+  return deGastos.concat(deAppCompleta);
+}
 function renderInventario() {
-  const categorias = ['Ropa', 'Alacena', 'Mueble', 'Papeleria', 'General'];
-  const filtroCont = document.getElementById('filtroInvCategoria');
-  filtroCont.innerHTML = '<span class="pill' + (invCategoriaFiltro === '' ? ' on' : '') + '" onclick="filtrarInvCategoria(\'\')">Todo</span>' +
-    categorias.map(c => `<span class="pill${invCategoriaFiltro === c ? ' on' : ''}" onclick="filtrarInvCategoria('${c}')">${c}</span>`).join('');
+  document.getElementById('filtroInvCategoria').innerHTML =
+    '<span class="pill' + (invGrupoFiltro === '' ? ' on' : '') + '" onclick="filtrarInvGrupo(\'\')">Todo</span>' +
+    ['Alacena', 'General'].map(g => `<span class="pill${invGrupoFiltro === g ? ' on' : ''}" onclick="filtrarInvGrupo('${g}')">${g}</span>`).join('');
   renderInvArbol();
 }
-function filtrarInvCategoria(c) { invCategoriaFiltro = c; invPadreActual = ''; renderInventario(); }
+function filtrarInvGrupo(g) { invGrupoFiltro = g; invRutaActual = ''; renderInvArbol(); }
 
 function renderInvArbol() {
-  const items = (DATA.INVENTARIO || []);
-  const hijos = items.filter(i => String(i.UbicacionPadreId || '') === String(invPadreActual) && (!invCategoriaFiltro || i.Categoria === invCategoriaFiltro || String(i.EsUbicacion) === 'true'));
-  renderBreadcrumb(items);
-  const cont = document.getElementById('invArbol');
-  if (!hijos.length) { cont.innerHTML = '<div class="empty-state">Vacío — agrega un objeto o una carpeta</div>'; return; }
-  const carpetas = hijos.filter(i => String(i.EsUbicacion) === 'true');
-  const objetos = hijos.filter(i => String(i.EsUbicacion) !== 'true');
-  cont.innerHTML =
-    carpetas.map(c => {
-      const cuenta = items.filter(i => String(i.UbicacionPadreId) === String(c.ID)).length;
-      return `<div class="folder-row" onclick="entrarCarpeta('${c.ID}')"><span class="folder-icon">📁</span><span class="lr-title">${escapeHtml(c.Nombre)}</span><span class="count">${cuenta}</span><span class="chevron">›</span></div>`;
-    }).join('') +
-    objetos.map(o => `
-      <div class="folder-row" onclick="verItemInventario('${o.ID}')">
-        <span class="folder-icon">${o.FotoURL ? '🖼️' : '📦'}</span>
-        <div class="lr-main"><span class="lr-title">${escapeHtml(o.Nombre)}</span><span class="lr-sub">${escapeHtml(o.Categoria || '')}${o.Cantidad ? ' · ' + escapeHtml(o.Cantidad) : ''}</span></div>
-      </div>`).join('');
-}
-
-function renderBreadcrumb(items) {
-  const cadena = [];
-  let actual = invPadreActual;
-  while (actual) {
-    const fila = items.find(i => String(i.ID) === String(actual));
-    if (!fila) break;
-    cadena.unshift(fila);
-    actual = fila.UbicacionPadreId;
-  }
+  const items = itemsInventario().filter(it => !invGrupoFiltro || it.grupo === invGrupoFiltro);
+  const prefix = invRutaActual ? invRutaActual + '/' : '';
+  const subcarpetas = {}; const itemsAqui = [];
+  items.forEach(it => {
+    const ubi = String(it.ubicacion || '').trim();
+    if (invRutaActual) {
+      if (ubi === invRutaActual) { itemsAqui.push(it); return; }
+      if (ubi.indexOf(prefix) === 0) {
+        const siguiente = ubi.slice(prefix.length).split('/')[0];
+        if (siguiente) subcarpetas[siguiente] = (subcarpetas[siguiente] || 0) + 1;
+      }
+    } else {
+      if (!ubi) { itemsAqui.push(it); return; }
+      const siguiente = ubi.split('/')[0];
+      subcarpetas[siguiente] = (subcarpetas[siguiente] || 0) + 1;
+    }
+  });
   const bc = document.getElementById('invBreadcrumb');
-  bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + cadena.map(f => ` › <span onclick="entrarCarpeta('${f.ID}')">${escapeHtml(f.Nombre)}</span>`).join('');
+  const partes = invRutaActual ? invRutaActual.split('/') : [];
+  bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + partes.map((p, i) => ` › <span onclick="irACarpetaInv(${i})">${escapeHtml(p)}</span>`).join('');
+  const cont = document.getElementById('invArbol');
+  const nombresCarpetas = Object.keys(subcarpetas);
+  if (!nombresCarpetas.length && !itemsAqui.length) { cont.innerHTML = '<div class="empty-state">Vacío — agrega un objeto</div>'; return; }
+  cont.innerHTML =
+    nombresCarpetas.map(nombre => `<div class="folder-row" onclick="entrarCarpetaInv('${escapeHtml(nombre).replace(/'/g, "\\'")}')"><span class="folder-icon">📁</span><span class="lr-title">${escapeHtml(nombre)}</span><span class="count">${subcarpetas[nombre]}</span><span class="chevron">›</span></div>`).join('') +
+    itemsAqui.map(it => `<div class="folder-row" onclick="verItemInventario('${it.origen}','${it.ref}')"><span class="folder-icon">${it.foto ? '🖼️' : '📦'}</span><div class="lr-main"><span class="lr-title">${escapeHtml(it.nombre)}</span><span class="lr-sub">${it.cantidad ? escapeHtml(String(it.cantidad)) : ''}</span></div></div>`).join('');
 }
-function irRaizInventario() { invPadreActual = ''; renderInvArbol(); }
-function entrarCarpeta(id) { invPadreActual = id; renderInvArbol(); }
+function irRaizInventario() { invRutaActual = ''; renderInvArbol(); }
+function irACarpetaInv(index) { invRutaActual = invRutaActual.split('/').slice(0, index + 1).join('/'); renderInvArbol(); }
+function entrarCarpetaInv(nombre) { invRutaActual = invRutaActual ? invRutaActual + '/' + nombre : nombre; renderInvArbol(); }
 
-function verItemInventario(id) {
-  const item = (DATA.INVENTARIO || []).find(i => i.ID === id);
-  if (!item) return;
-  pedirConfirmacion(item.Nombre, '¿Qué quieres hacer con este objeto?', () => {});
-  // acción rápida: eliminar (mandar a papelera)
-  document.getElementById('confirmTexto').textContent = (item.Notas || item.Categoria || '') + ' — ¿Eliminar (se va a la papelera)?';
-  document.getElementById('confirmBtnOk').onclick = () => { cerrarModal('modalConfirm'); apiCall('deleteRow', { table: 'INVENTARIO', id: id, usuario: usuarioActual.Nombre }).then(cargarTodo); };
+function verItemInventario(origen, ref) {
+  pedirConfirmacion('Eliminar', '¿Eliminar este objeto del inventario (se va a la papelera)?', () => {
+    if (origen === 'gastos') apiCall('deleteGasto', { rowIndex: ref, eliminadoPor: usuarioActual.Nombre }).then(cargarTodo);
+    else apiCall('deleteRowAppCompleta', { table: 'INVENTARIO_GENERAL', id: ref }).then(cargarTodo);
+  });
 }
-
-function setTipoInventario(esCarpeta) {
-  tipoInventarioEsCarpeta = esCarpeta;
-  document.getElementById('pillItem').classList.toggle('on', !esCarpeta);
-  document.getElementById('pillCarpeta').classList.toggle('on', esCarpeta);
-  document.getElementById('campoCategoriaInv').classList.toggle('hidden', esCarpeta);
-  document.getElementById('campoCantidadInv').classList.toggle('hidden', esCarpeta);
+function elegirGrupoInv(g) {
+  invGrupoNuevo = g;
+  document.getElementById('pillAlacena').classList.toggle('on', g === 'Alacena');
+  document.getElementById('pillGeneral').classList.toggle('on', g === 'General');
 }
 function abrirModalInventario() {
   document.getElementById('invNombre').value = '';
   document.getElementById('invCantidad').value = '';
-  const sel = document.getElementById('invCategoria');
-  sel.innerHTML = (DATA.CATALOGOS || []).filter(c => c.Tipo === 'InventarioCategoria').map(c => `<option value="${escapeHtml(c.Nombre)}">${c.Emoji || ''} ${escapeHtml(c.Nombre)}</option>`).join('') || '<option value="General">General</option>';
-  setTipoInventario(false);
-  document.getElementById('invModalTitulo').textContent = invPadreActual ? 'Nuevo dentro de esta carpeta' : 'Nuevo en inventario';
+  document.getElementById('invUbicacion').value = invRutaActual;
+  elegirGrupoInv(invGrupoFiltro || 'Alacena');
   abrirModal('modalInventario');
 }
 function guardarInventario() {
   const nombre = document.getElementById('invNombre').value.trim();
   if (!nombre) return;
-  conEstadoGuardando('btnGuardarInventario', () => apiCall('saveRow', {
-    table: 'INVENTARIO', row: {
-      Nombre: nombre, EsUbicacion: tipoInventarioEsCarpeta,
-      Categoria: tipoInventarioEsCarpeta ? (DATA.INVENTARIO.find(i => i.ID === invPadreActual) || {}).Categoria || 'General' : document.getElementById('invCategoria').value,
-      Cantidad: document.getElementById('invCantidad').value,
-      UbicacionPadreId: invPadreActual, Usuario: usuarioActual.Nombre
+  const ubicacion = document.getElementById('invUbicacion').value;
+  const cantidad = document.getElementById('invCantidad').value;
+  conEstadoGuardando('btnGuardarInventario', () => {
+    if (invGrupoNuevo === 'General') {
+      return apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: { Nombre: nombre, Categoria: 'General', Ubicacion: ubicacion, Cantidad: cantidad, Usuario: usuarioActual.Nombre } });
     }
-  })).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); cargarTodo(); } });
+    return apiCall('syncProductoExterno', { externoId: 'man-' + Date.now(), externoOrigen: 'Centro', grupo: 'Alacena', concepto: nombre, ubicacion: ubicacion, cantidad: cantidad, sesion: usuarioActual.Nombre });
+  }).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); cargarTodo(); } });
 }
 
 // ============================================================================
-// ROPA — prendas en INVENTARIO (Categoria='Ropa') + "hoy me puse esto"
+// ROPA — acciones reales de Ropa.js (getAllRopa/saveRowRopa/registrarUso)
 // ============================================================================
 function renderRopa() {
-  const prendas = (DATA.INVENTARIO || []).filter(i => i.Categoria === 'Ropa' && String(i.EsUbicacion) !== 'true');
-  const usosHoy = (DATA.USO_ROPA || []).filter(u => u.Fecha === hoyISO());
+  const prendas = ((DATA.ropa && DATA.ropa.prendas) || []);
+  const usosHoy = ((DATA.ropa && DATA.ropa.usos) || []).filter(u => u.Fecha === hoyISO());
   document.getElementById('resumenRopa').innerHTML = `
     <div class="list-row"><div class="lr-main"><span class="lr-title">Prendas registradas</span></div><span class="lr-val">${prendas.length}</span></div>
     <div class="list-row"><div class="lr-main"><span class="lr-title">Usadas hoy</span></div><span class="lr-val">${usosHoy.length}</span></div>
@@ -828,39 +808,41 @@ function renderRopa() {
   if (!prendas.length) { cont.innerHTML = '<div class="empty-state">Sin prendas todavía</div>'; return; }
   cont.innerHTML = prendas.map(p => `
     <div class="list-row">
-      <div class="lr-main"><span class="lr-title">${escapeHtml(p.Nombre)}</span><span class="lr-sub">${escapeHtml(p.Color || '')}${p.Marca ? ' · ' + escapeHtml(p.Marca) : ''}${p.VecesUsado ? ' · usada ' + p.VecesUsado + ' veces' : ''}</span></div>
+      <div class="lr-main"><span class="lr-title">${escapeHtml(p.Tipo || p.Categoria || '')}</span><span class="lr-sub">${escapeHtml(p.Color || '')}${p.Marca ? ' · ' + escapeHtml(p.Marca) : ''}${p.VecesUsado ? ' · usada ' + p.VecesUsado + ' veces' : ''}</span></div>
       <button class="btn btn-sec btn-sm" onclick="marcarUsoPrenda('${p.ID}')">Me la puse hoy</button>
     </div>`).join('');
 }
 function abrirModalPrenda() {
   ['pNombre', 'pColor', 'pMarca', 'pTemporada'].forEach(id => document.getElementById(id).value = '');
+  const sel = document.getElementById('pCategoria');
+  sel.innerHTML = CATEGORIAS_ROPA.map(c => `<option value="${c}">${c}</option>`).join('');
   abrirModal('modalPrenda');
 }
 function guardarPrenda() {
-  const nombre = document.getElementById('pNombre').value.trim();
-  if (!nombre) return;
-  conEstadoGuardando('btnGuardarPrenda', () => apiCall('saveRow', {
-    table: 'INVENTARIO', row: {
-      Nombre: nombre, Categoria: 'Ropa',
+  const tipo = document.getElementById('pNombre').value.trim();
+  if (!tipo) return;
+  conEstadoGuardando('btnGuardarPrenda', () => apiCall('saveRowRopa', {
+    table: 'PRENDAS', row: {
+      Categoria: document.getElementById('pCategoria').value, Tipo: tipo,
       Color: document.getElementById('pColor').value, Marca: document.getElementById('pMarca').value,
-      Temporada: document.getElementById('pTemporada').value, Usuario: usuarioActual.Nombre
+      Temporada: document.getElementById('pTemporada').value
     }
   })).then(res => { if (res && res.ok) { cerrarModal('modalPrenda'); cargarTodo(); } });
 }
 function marcarUsoPrenda(id) {
-  apiCall('registrarUsoPrenda', { prendaIds: [id], fecha: hoyISO(), usuario: usuarioActual.Nombre }).then(res => {
+  apiCall('registrarUso', { prendaIds: [id], fecha: hoyISO() }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     cargarTodo();
   });
 }
 
 // ============================================================================
-// COMIDAS — registro con estimación de macros por IA
+// COMIDAS — acciones reales de Comidas.js (getAllComidas/saveRowComidas/analizarComidaConIA)
 // ============================================================================
 let comidaSlotActual = 'desayuno';
 function renderComidas() {
   const hoy = hoyISO();
-  const registros = (DATA.NUTRICION_LOG || []).filter(r => r.Fecha === hoy);
+  const registros = ((DATA.comidas && DATA.comidas.nutricion_log) || []).filter(r => r.Fecha === hoy);
   const totalKcal = registros.reduce((s, r) => s + (Number(r.Energia) || 0), 0);
   document.getElementById('resumenComidas').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Calorías de hoy</span></div><span class="lr-val">${totalKcal} kcal</span></div>`;
   const cont = document.getElementById('listaComidasHoy');
@@ -883,19 +865,19 @@ function estimarNutricionIA() {
   if (!descripcion) { alert('Describe qué comiste primero'); return; }
   const btn = document.getElementById('btnEstimarIA');
   btn.disabled = true; btn.textContent = 'Estimando…';
-  apiCall('estimarNutricionTexto', { descripcion: descripcion }).then(res => {
+  apiCall('analizarComidaConIA', { texto: descripcion }).then(res => {
     btn.disabled = false; btn.textContent = '✨ Estimar calorías con IA';
     if (!res.ok) { alert('No se pudo estimar: ' + res.error); return; }
-    document.getElementById('cmEnergia').value = res.datos.energia || '';
-    document.getElementById('cmProteina').value = res.datos.proteina || '';
-    document.getElementById('cmCarbohidratos').value = res.datos.carbohidratos || '';
-    document.getElementById('cmGrasas').value = res.datos.grasas || '';
+    document.getElementById('cmEnergia').value = res.energia || '';
+    document.getElementById('cmProteina').value = res.proteina || '';
+    document.getElementById('cmCarbohidratos').value = res.carbohidratos || '';
+    document.getElementById('cmGrasas').value = res.grasas || '';
   });
 }
 function guardarComida() {
   const descripcion = document.getElementById('cmDescripcion').value.trim();
   if (!descripcion) return;
-  conEstadoGuardando('btnGuardarComida', () => apiCall('saveRow', {
+  conEstadoGuardando('btnGuardarComida', () => apiCall('saveRowComidas', {
     table: 'NUTRICION_LOG', row: {
       Usuario: usuarioActual.Nombre, Fecha: hoyISO(), Hora: new Date().toTimeString().slice(0, 5),
       Descripcion: descripcion, Slot: comidaSlotActual,
@@ -906,7 +888,7 @@ function guardarComida() {
 }
 
 // ============================================================================
-// ACUERDOS
+// ACUERDOS — acciones reales de Acuerdos.js (getAllAcuerdos/saveRowAcuerdos/marcarEstado)
 // ============================================================================
 let acuerdosFiltroEstado = 'Pendiente';
 function filtrarAcuerdos(estado) {
@@ -915,7 +897,7 @@ function filtrarAcuerdos(estado) {
   renderAcuerdos();
 }
 function renderAcuerdos() {
-  const todos = (DATA.ACUERDOS || []).slice().sort((a, b) => String(a.FechaLimite || '9999').localeCompare(String(b.FechaLimite || '9999')));
+  const todos = ((DATA.acuerdos && DATA.acuerdos.acuerdos) || []).slice().sort((a, b) => String(a.FechaLimite || '9999').localeCompare(String(b.FechaLimite || '9999')));
   const lista = acuerdosFiltroEstado ? todos.filter(a => (a.Estado || 'Pendiente') === acuerdosFiltroEstado) : todos;
   const cont = document.getElementById('listaAcuerdos');
   if (!lista.length) { cont.innerHTML = '<div class="empty-state">Sin acuerdos aquí</div>'; return; }
@@ -933,7 +915,7 @@ function abrirModalAcuerdo() {
 function guardarAcuerdo() {
   const titulo = document.getElementById('acTitulo').value.trim();
   if (!titulo) return;
-  conEstadoGuardando('btnGuardarAcuerdo', () => apiCall('saveRow', {
+  conEstadoGuardando('btnGuardarAcuerdo', () => apiCall('saveRowAcuerdos', {
     table: 'ACUERDOS', row: {
       Titulo: titulo, ConQuien: document.getElementById('acConQuien').value,
       FechaLimite: document.getElementById('acFechaLimite').value,
@@ -943,57 +925,28 @@ function guardarAcuerdo() {
   })).then(res => { if (res && res.ok) { cerrarModal('modalAcuerdo'); cargarTodo(); } });
 }
 function marcarAcuerdoCumplido(id) {
-  apiCall('saveRow', { table: 'ACUERDOS', row: { ID: id, Estado: 'Cumplido', FechaCumplimiento: hoyISO() } }).then(res => {
+  apiCall('marcarEstado', { id: id, estado: 'Cumplido' }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     cargarTodo();
   });
 }
 
 // ============================================================================
-// CONFIGURACIÓN — tarjetas, categorías, mejoras, papelera (BASES_APPS §12)
+// CONFIGURACIÓN — Mejoras (tabla compartida Acuerdos/App_Completa)
 // ============================================================================
 function renderConfig() {
-  document.getElementById('listaTarjetas').innerHTML = (DATA.TARJETAS || []).map(t => `
-    <div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(t.Nombre)}</span><span class="lr-sub">${escapeHtml(t.Banco || '')}</span></div>
-    <button class="btn btn-sec btn-sm" onclick="eliminarCatalogo('TARJETAS','${t.ID}')">Quitar</button></div>`).join('') || '<div class="empty-state">Sin tarjetas</div>';
-
-  document.getElementById('listaCategoriasInv').innerHTML = (DATA.CATALOGOS || []).filter(c => c.Tipo === 'InventarioCategoria').map(c => `
-    <div class="list-row"><div class="lr-main"><span class="lr-title">${c.Emoji || ''} ${escapeHtml(c.Nombre)}</span></div>
-    <button class="btn btn-sec btn-sm" onclick="eliminarCatalogo('CATALOGOS','${c.ID}')">Quitar</button></div>`).join('') || '<div class="empty-state">Sin categorías — agrega Ropa, Alacena, Mueble, Papelería...</div>';
-
-  document.getElementById('listaMejoras').innerHTML = (DATA.MEJORAS || []).slice().reverse().map(m => `
-    <div class="list-row"><div class="lr-main"><span class="lr-title linkify">${linkify(m.Texto)}</span><span class="lr-sub">${escapeHtml(m.Fecha || '').slice(0, 10)}</span></div>
-    <span><button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText('${escapeHtml(m.Texto).replace(/'/g, "\\'")}')">Copiar</button> <button class="btn btn-danger btn-sm" onclick="eliminarCatalogo('MEJORAS','${m.ID}')">Eliminar</button></span></div>`).join('');
-
-  document.getElementById('listaPapelera').innerHTML = (DATA.PAPELERA || []).map(p => {
-    const datos = JSON.parse(p.DatosJSON || '{}');
-    return `<div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(p.Tabla)}: ${escapeHtml(datos.Nombre || datos.Concepto || datos.Titulo || p.ID)}</span><span class="lr-sub">${escapeHtml(p.FechaEliminacion || '').slice(0, 10)}</span></div>
-    <span><button class="btn btn-sec btn-sm" onclick="restaurarPapelera('${p.ID}')">Restaurar</button></span></div>`;
-  }).join('') || '<div class="empty-state">Papelera vacía</div>';
+  const mejoras = ((DATA.acuerdos && DATA.acuerdos.mejoras) || []).filter(m => !(m.Papelera === true || String(m.Papelera).toLowerCase() === 'true'));
+  document.getElementById('listaMejoras').innerHTML = mejoras.slice().reverse().map(m => `
+    <div class="list-row"><div class="lr-main"><span class="lr-title linkify">${linkify(m.Texto)}</span><span class="lr-sub">${escapeHtml(String(m.Fecha || '')).slice(0, 10)}</span></div>
+    <span><button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText('${escapeHtml(m.Texto).replace(/'/g, "\\'")}')">Copiar</button> <button class="btn btn-danger btn-sm" onclick="eliminarMejora('${m.ID}')">Eliminar</button></span></div>`).join('');
 }
-function eliminarCatalogo(tabla, id) {
-  pedirConfirmacion('Eliminar', '¿Eliminar este elemento?', () => apiCall('deleteRow', { table: tabla, id: id, usuario: usuarioActual.Nombre }).then(cargarTodo));
+function eliminarMejora(id) {
+  pedirConfirmacion('Eliminar', '¿Eliminar esta mejora?', () => apiCall('deleteRowAcuerdos', { table: 'MEJORAS', id: id }).then(cargarTodo));
 }
-function restaurarPapelera(id) { apiCall('restaurarDeTrash', { id: id }).then(cargarTodo); }
-
-function abrirModalTarjeta() { document.getElementById('tNombre').value = ''; document.getElementById('tBanco').value = ''; abrirModal('modalTarjeta'); }
-function guardarTarjeta() {
-  const nombre = document.getElementById('tNombre').value.trim();
-  if (!nombre) return;
-  apiCall('saveRow', { table: 'TARJETAS', row: { Nombre: nombre, Banco: document.getElementById('tBanco').value, Usuario: usuarioActual.Nombre } }).then(res => { if (res.ok) { cerrarModal('modalTarjeta'); cargarTodo(); } });
-}
-
-function abrirModalCategoriaInv() { document.getElementById('cNombre').value = ''; document.getElementById('cEmoji').value = ''; abrirModal('modalCategoriaInv'); }
-function guardarCategoriaInv() {
-  const nombre = document.getElementById('cNombre').value.trim();
-  if (!nombre) return;
-  apiCall('saveRow', { table: 'CATALOGOS', row: { Tipo: 'InventarioCategoria', Nombre: nombre, Emoji: document.getElementById('cEmoji').value } }).then(res => { if (res.ok) { cerrarModal('modalCategoriaInv'); cargarTodo(); } });
-}
-
 function agregarMejora() {
   const texto = document.getElementById('inpMejoraTexto').value.trim();
   if (!texto) return;
-  apiCall('saveRow', { table: 'MEJORAS', row: { Texto: texto, Fecha: new Date().toISOString(), Usuario: usuarioActual.Nombre } }).then(res => {
+  apiCall('saveRowAcuerdos', { table: 'MEJORAS', row: { Texto: texto, Fecha: new Date().toISOString() } }).then(res => {
     if (res.ok) { document.getElementById('inpMejoraTexto').value = ''; cargarTodo(); }
   });
 }
@@ -1003,7 +956,6 @@ function forzarActualizacion() {
   caches && caches.keys && caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
   location.href = location.pathname + '?v=' + Date.now();
 }
-
 function exportarRespaldo() {
   const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
