@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="cache-control" content="no-store">
+<title>Centro</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f2f2f7">
+<style>
+:root{
+  --bg:#f2f2f7; --card:#ffffff; --card2:#f9f9fb;
+  --border:rgba(60,60,67,.13); --border2:rgba(60,60,67,.22);
+  --ink:#1c1c1e; --ink2:#6e6e73; --ink3:#aeaeb2;
+  --accent:#0a84ff; --accent-bg:rgba(10,132,255,.1);
+  --green:#34c759; --red:#ff3b30; --orange:#ff9500; --purple:#af52de;
+  --radius:16px; --radius-sm:11px;
+  --sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#000000; --card:#1c1c1e; --card2:#2c2c2e;
+    --border:rgba(255,255,255,.14); --border2:rgba(255,255,255,.24);
+    --ink:#f2f2f7; --ink2:#98989d; --ink3:#636366;
+    --accent:#0a84ff; --accent-bg:rgba(10,132,255,.18);
+  }
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom)); overscroll-behavior-y:none;}
+input,select,textarea,button{font-family:var(--sans)}
+a{color:var(--accent)}
+.hidden{display:none !important}
+
+/* ---- pantallas de arranque (conexión / usuario) ---- */
+.start-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px}
+.start-logo{font-size:40px;font-weight:700}
+.start-card{background:var(--card);border-radius:var(--radius);padding:20px;width:100%;max-width:380px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.start-card input{width:100%;padding:12px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink);font-size:15px;margin-bottom:10px;outline:none}
+.start-card input:focus{border-color:var(--accent)}
+.user-chip{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:var(--radius-sm);background:var(--card2);margin-bottom:8px;cursor:pointer;transition:background .15s}
+.user-chip:hover{background:var(--accent-bg)}
+.user-avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}
+
+/* ---- botones ---- */
+.btn{padding:11px 18px;border-radius:var(--radius-sm);border:none;background:var(--accent);color:#fff;
+  font-size:15px;font-weight:600;cursor:pointer;transition:opacity .1s,transform .1s;width:100%}
+.btn:active{opacity:.7;transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-sec{background:var(--card2);color:var(--ink)}
+.btn-sm{width:auto;padding:7px 14px;font-size:13px}
+.btn-danger{background:var(--red)}
+
+/* ---- header ---- */
+.topbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
+.topbar h1{font-size:19px;font-weight:700}
+.topbar .hdr-btn{background:none;border:none;font-size:20px;color:var(--accent);cursor:pointer;padding:4px 8px}
+
+/* ---- contenido ---- */
+.view{padding:16px;max-width:720px;margin:0 auto;display:none}
+.view.active{display:block}
+.card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.section-title{font-size:13px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;margin:18px 4px 8px}
+.empty-state{text-align:center;color:var(--ink3);padding:32px 16px;font-size:14px}
+.loading{text-align:center;color:var(--ink3);padding:24px}
+
+/* ---- cuadro de IA (Inicio) ---- */
+.ia-box textarea{width:100%;min-height:70px;border:none;background:none;color:var(--ink);font-size:16px;resize:none;outline:none;font-family:var(--sans)}
+.ia-box{display:flex;flex-direction:column;gap:10px}
+.ia-hint{font-size:12px;color:var(--ink3)}
+.ia-result-card{border:1px solid var(--accent-bg);background:var(--accent-bg);border-radius:var(--radius-sm);padding:14px;margin-top:10px}
+.ia-field{margin-bottom:8px}
+.ia-field label{display:block;font-size:12px;color:var(--ink2);margin-bottom:3px}
+.ia-field input,.ia-field select{width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--card);color:var(--ink);font-size:14px}
+.ia-row{display:flex;gap:10px}
+.ia-row>*{flex:1}
+
+/* ---- listas tipo lista de iOS ---- */
+.list-row{display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--border)}
+.list-row:last-child{border-bottom:none}
+.list-row .lr-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.list-row .lr-title{font-size:15px;font-weight:500}
+.list-row .lr-sub{font-size:12px;color:var(--ink2)}
+.list-row .lr-val{font-weight:600;white-space:nowrap}
+.lr-val.neg{color:var(--red)}
+.lr-val.pos{color:var(--green)}
+
+/* ---- inventario (árbol) ---- */
+.breadcrumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:13px;color:var(--ink2)}
+.breadcrumb span{cursor:pointer;color:var(--accent)}
+.folder-row{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--border);cursor:pointer}
+.folder-row:last-child{border-bottom:none}
+.folder-icon{font-size:22px;width:28px;text-align:center;flex-shrink:0}
+.folder-row .lr-title{font-size:15px;font-weight:500}
+.folder-row .count{color:var(--ink3);font-size:13px;margin-left:auto}
+.chevron{color:var(--ink3);font-size:14px}
+
+/* ---- tabs inferiores ---- */
+.tabbar{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;
+  background:color-mix(in srgb, var(--card) 88%, transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 6px;background:none;border:none;color:var(--ink3);font-size:10.5px;cursor:pointer}
+.tab .tab-icon{font-size:21px}
+.tab.active{color:var(--accent)}
+
+/* ---- modal ---- */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:600px){.modal-overlay{align-items:center}}
+.modal-sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:18px}
+@media (min-width:600px){.modal-sheet{border-radius:20px}}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:14px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12.5px;color:var(--ink2);margin-bottom:4px;font-weight:500}
+.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink);font-size:15px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+
+/* ---- toggles tipo pills ---- */
+.pill-group{display:flex;gap:6px;flex-wrap:wrap}
+.pill{padding:6px 13px;border-radius:20px;border:1px solid var(--border2);background:var(--card2);color:var(--ink2);font-size:13px;cursor:pointer}
+.pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;
+  background:var(--accent);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;
+  border:none;cursor:pointer;box-shadow:0 4px 12px rgba(10,132,255,.4);z-index:15}
+.fab:active{transform:scale(.92)}
+.linkify a{color:var(--accent);word-break:break-all}
+</style>
+</head>
+<body>
+
+<!-- ============ PANTALLA: conexión ============ -->
+<div id="screenSetup" class="start-screen hidden">
+  <div class="start-logo">🏠 Centro</div>
+  <div class="start-card">
+    <p style="margin-bottom:12px;color:var(--ink2);font-size:13.5px">Pega la URL de la Web App (Apps Script → Implementar).</p>
+    <input id="inpWebAppUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+    <button class="btn" onclick="guardarWebAppUrl()">Conectar</button>
+  </div>
+</div>
+
+<!-- ============ PANTALLA: usuario ============ -->
+<div id="screenUsuario" class="start-screen hidden">
+  <div class="start-logo">🏠 Centro</div>
+  <div class="start-card">
+    <div id="listaUsuarios"></div>
+    <div id="formNuevoUsuario" class="hidden" style="margin-top:10px">
+      <input id="inpNuevoNombre" type="text" placeholder="Tu nombre">
+      <input id="inpNuevaPass" type="password" placeholder="Contraseña (opcional)">
+      <button class="btn" onclick="crearUsuarioInicial()">Entrar</button>
+    </div>
+    <button id="btnMostrarNuevoUsuario" class="btn btn-sec" onclick="document.getElementById('formNuevoUsuario').classList.remove('hidden');this.classList.add('hidden')" style="margin-top:6px">+ Nuevo usuario</button>
+  </div>
+</div>
+
+<!-- ============ APP PRINCIPAL ============ -->
+<div id="app" class="hidden">
+  <div class="topbar">
+    <h1 id="topbarTitle">Inicio</h1>
+    <button class="hdr-btn" onclick="abrirConfig()">⚙️</button>
+  </div>
+
+  <!-- ---- INICIO ---- -->
+  <div class="view active" id="view-inicio">
+    <div class="card ia-box">
+      <textarea id="iaTexto" placeholder="Hoy compré hilo con la Santander... Hoy me puse la chamarra azul... Mañana entrega del proyecto..."></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="ia-hint">La IA entiende qué hiciste y lo manda al módulo correcto</span>
+        <button class="btn btn-sm" style="width:auto" onclick="enviarTextoIA()" id="btnEnviarIA">Entender</button>
+      </div>
+      <div id="iaResultado"></div>
+    </div>
+    <div class="section-title">Resumen</div>
+    <div class="card" id="resumenHoy"><div class="loading">Cargando…</div></div>
+  </div>
+
+  <!-- ---- GASTOS ---- -->
+  <div class="view" id="view-gastos">
+    <div class="card" id="resumenGastos"></div>
+    <div class="section-title">Movimientos</div>
+    <div class="card" id="listaGastos"><div class="loading">Cargando…</div></div>
+    <button class="fab" onclick="abrirModalGasto()">+</button>
+  </div>
+
+  <!-- ---- INVENTARIO ---- -->
+  <div class="view" id="view-inventario">
+    <div class="pill-group" id="filtroInvCategoria" style="margin-bottom:10px"></div>
+    <div class="breadcrumb" id="invBreadcrumb"></div>
+    <div class="card" id="invArbol"><div class="loading">Cargando…</div></div>
+    <button class="fab" onclick="abrirModalInventario()">+</button>
+  </div>
+
+  <!-- ---- ROPA / COMIDAS / ACUERDOS / VIAJES / NOTAS (fase 2-3) ---- -->
+  <div class="view" id="view-ropa"><div class="empty-state">👔 Ropa — próximamente (fase 2)<br><span style="font-size:12px">Por ahora, usa el cuadro de IA en Inicio: "hoy me puse..."</span></div></div>
+  <div class="view" id="view-comidas"><div class="empty-state">🍽️ Comidas — próximamente (fase 2)</div></div>
+  <div class="view" id="view-acuerdos"><div class="empty-state">🤝 Acuerdos — próximamente (fase 3)</div></div>
+  <div class="view" id="view-viajes"><div class="empty-state">✈️ Itinerario — próximamente (fase 3)</div></div>
+  <div class="view" id="view-notas"><div class="empty-state">📝 Notas — próximamente (fase 3)</div></div>
+
+  <!-- ---- CONFIGURACIÓN ---- -->
+  <div class="view" id="view-config">
+    <div class="card">
+      <div class="list-row"><div class="lr-main"><span class="lr-title">Versión</span><span class="lr-sub" id="versionTexto">—</span></div>
+        <button class="btn btn-sec btn-sm" onclick="forzarActualizacion()">Forzar actualización</button></div>
+      <div class="list-row"><div class="lr-main"><span class="lr-title">Usuario</span><span class="lr-sub" id="usuarioActualTexto">—</span></div>
+        <button class="btn btn-sec btn-sm" onclick="cambiarUsuario()">Cambiar</button></div>
+      <div class="list-row"><div class="lr-main"><span class="lr-title">Respaldo</span></div>
+        <button class="btn btn-sec btn-sm" onclick="exportarRespaldo()">Exportar</button></div>
+    </div>
+    <div class="section-title">Tarjetas</div>
+    <div class="card" id="listaTarjetas"></div>
+    <button class="btn btn-sec" onclick="abrirModalTarjeta()" style="margin-top:8px">+ Agregar tarjeta</button>
+
+    <div class="section-title">Categorías de inventario</div>
+    <div class="card" id="listaCategoriasInv"></div>
+    <button class="btn btn-sec" onclick="abrirModalCategoriaInv()" style="margin-top:8px">+ Agregar categoría</button>
+
+    <div class="section-title">Mejoras</div>
+    <div class="card">
+      <textarea id="inpMejoraTexto" placeholder="Idea, queja, algo que se me ocurra..." style="width:100%;min-height:50px;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px;background:var(--card2);color:var(--ink)"></textarea>
+      <button class="btn" style="margin-top:8px" onclick="agregarMejora()">Agregar</button>
+      <div id="listaMejoras" style="margin-top:10px"></div>
+    </div>
+    <div class="section-title">Papelera</div>
+    <div class="card" id="listaPapelera"></div>
+  </div>
+
+  <div class="tabbar">
+    <button class="tab active" data-view="inicio" onclick="irAVista('inicio')"><span class="tab-icon">🏠</span>Inicio</button>
+    <button class="tab" data-view="gastos" onclick="irAVista('gastos')"><span class="tab-icon">💰</span>Gastos</button>
+    <button class="tab" data-view="inventario" onclick="irAVista('inventario')"><span class="tab-icon">📦</span>Inventario</button>
+    <button class="tab" data-view="ropa" onclick="irAVista('ropa')"><span class="tab-icon">👔</span>Ropa</button>
+    <button class="tab" data-view="comidas" onclick="irAVista('comidas')"><span class="tab-icon">🍽️</span>Comidas</button>
+    <button class="tab" data-view="config" onclick="irAVista('config')"><span class="tab-icon">⚙️</span>Más</button>
+  </div>
+</div>
+
+<!-- ============ MODAL genérico de confirmación (BASES_APPS §5) ============ -->
+<div id="modalConfirm" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalConfirm')">
+  <div class="modal-sheet" style="max-width:340px">
+    <div class="modal-title" id="confirmTitulo">¿Confirmar?</div>
+    <p id="confirmTexto" style="color:var(--ink2);font-size:14px;margin-bottom:6px"></p>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="cerrarModal('modalConfirm')">Cancelar</button>
+      <button class="btn btn-danger" id="confirmBtnOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: nuevo gasto ============ -->
+<div id="modalGasto" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalGasto')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nuevo gasto</div>
+    <div class="field"><label>Concepto</label><input id="gConcepto" type="text"></div>
+    <div class="field"><label>Costo</label><input id="gCosto" type="number" step="0.01"></div>
+    <div class="field"><label>Moneda</label><input id="gMoneda" type="text" value="MXN"></div>
+    <div class="field"><label>Tienda</label><input id="gTienda" type="text"></div>
+    <div class="field"><label>Tarjeta / pago</label><select id="gTarjeta"></select></div>
+    <div class="field"><label>Fecha</label><input id="gFecha" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalGasto')">Cancelar</button>
+      <button class="btn" id="btnGuardarGasto" onclick="guardarGasto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: item/carpeta de inventario ============ -->
+<div id="modalInventario" class="modal-overlay hidden" onclick="if(event.target===this) intentarCerrarModal('modalInventario')">
+  <div class="modal-sheet">
+    <div class="modal-title" id="invModalTitulo">Nuevo en inventario</div>
+    <div class="pill-group" style="margin-bottom:12px">
+      <span class="pill on" id="pillItem" onclick="setTipoInventario(false)">Objeto</span>
+      <span class="pill" id="pillCarpeta" onclick="setTipoInventario(true)">Carpeta / ubicación</span>
+    </div>
+    <div class="field"><label>Nombre</label><input id="invNombre" type="text"></div>
+    <div class="field" id="campoCategoriaInv"><label>Categoría</label><select id="invCategoria"></select></div>
+    <div class="field" id="campoCantidadInv"><label>Cantidad</label><input id="invCantidad" type="text"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="intentarCerrarModal('modalInventario')">Cancelar</button>
+      <button class="btn" id="btnGuardarInventario" onclick="guardarInventario()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: tarjeta ============ -->
+<div id="modalTarjeta" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalTarjeta')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nueva tarjeta</div>
+    <div class="field"><label>Nombre</label><input id="tNombre" type="text" placeholder="Santander Oro"></div>
+    <div class="field"><label>Banco</label><input id="tBanco" type="text"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="cerrarModal('modalTarjeta')">Cancelar</button>
+      <button class="btn" onclick="guardarTarjeta()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: categoría inventario ============ -->
+<div id="modalCategoriaInv" class="modal-overlay hidden" onclick="if(event.target===this) cerrarModal('modalCategoriaInv')">
+  <div class="modal-sheet">
+    <div class="modal-title">Nueva categoría</div>
+    <div class="field"><label>Nombre</label><input id="cNombre" type="text" placeholder="Ropa, Alacena, Mueble, Papelería..."></div>
+    <div class="field"><label>Emoji</label><input id="cEmoji" type="text" placeholder="📦"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" onclick="cerrarModal('modalCategoriaInv')">Cancelar</button>
+      <button class="btn" onclick="guardarCategoriaInv()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================================
+// ESTADO
+// ============================================================================
+const VERSION_APP = 'Primera piedra';
+let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
+let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
+let DATA = null; // caché de getAllData
+let invPadreActual = ''; // carpeta actual en la vista de inventario (ID o '' = raíz)
+let invCategoriaFiltro = '';
+let tipoInventarioEsCarpeta = false;
+let iaUltimaRespuesta = null;
+let modalStack = []; // para el botón atrás de Android
+
+// ============================================================================
+// API
+// ============================================================================
+function apiCall(action, payload) {
+  return fetch(webAppUrl, {
+    method: 'POST',
+    body: JSON.stringify(Object.assign({ action: action, usuario: usuarioActual ? usuarioActual.Nombre : '' }, payload || {}))
+  }).then(r => r.json()).catch(err => ({ ok: false, error: 'Sin conexión: ' + err.message }));
+}
+
+// ============================================================================
+// ARRANQUE
+// ============================================================================
+window.addEventListener('DOMContentLoaded', () => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (!webAppUrl) { mostrarPantalla('screenSetup'); return; }
+  if (!usuarioActual) { cargarPantallaUsuarios(); return; }
+  iniciarApp();
+});
+
+function mostrarPantalla(id) {
+  ['screenSetup', 'screenUsuario', 'app'].forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
+}
+
+function guardarWebAppUrl() {
+  const url = document.getElementById('inpWebAppUrl').value.trim();
+  if (!url) return;
+  webAppUrl = url;
+  localStorage.setItem('centro_webAppUrl', url);
+  cargarPantallaUsuarios();
+}
+
+function cargarPantallaUsuarios() {
+  mostrarPantalla('screenUsuario');
+  apiCall('listarUsuarios').then(res => {
+    const cont = document.getElementById('listaUsuarios');
+    cont.innerHTML = '';
+    if (!res.ok || !res.usuarios.length) {
+      document.getElementById('formNuevoUsuario').classList.remove('hidden');
+      document.getElementById('btnMostrarNuevoUsuario').classList.add('hidden');
+      return;
+    }
+    res.usuarios.forEach(u => {
+      const div = document.createElement('div');
+      div.className = 'user-chip';
+      div.innerHTML = `<div class="user-avatar">${(u.Nombre || '?')[0].toUpperCase()}</div><span>${escapeHtml(u.Nombre)}</span>`;
+      div.onclick = () => seleccionarUsuario(u);
+      cont.appendChild(div);
+    });
+  });
+}
+
+function seleccionarUsuario(u) {
+  if (u.TieneClave) {
+    const pass = prompt('Contraseña de ' + u.Nombre + ':');
+    apiCall('loginUsuario', { id: u.ID, password: pass }).then(res => {
+      if (!res.ok) { alert(res.error === 'PASSWORD' ? 'Contraseña incorrecta' : res.error); return; }
+      guardarUsuarioYEntrar(res.usuario);
+    });
+  } else {
+    guardarUsuarioYEntrar({ ID: u.ID, Nombre: u.Nombre });
+  }
+}
+
+function crearUsuarioInicial() {
+  const nombre = document.getElementById('inpNuevoNombre').value.trim();
+  if (!nombre) return;
+  const pass = document.getElementById('inpNuevaPass').value;
+  apiCall('crearOEditarUsuario', { usuario: { Nombre: nombre, Password: pass } }).then(res => {
+    if (!res.ok) { alert(res.error); return; }
+    guardarUsuarioYEntrar(res.row);
+  });
+}
+
+function guardarUsuarioYEntrar(u) {
+  usuarioActual = u;
+  localStorage.setItem('centro_usuario', JSON.stringify(u));
+  iniciarApp();
+}
+
+function cambiarUsuario() {
+  usuarioActual = null;
+  localStorage.removeItem('centro_usuario');
+  cargarPantallaUsuarios();
+}
+
+function iniciarApp() {
+  mostrarPantalla('app');
+  document.getElementById('versionTexto').textContent = 'Versión: ' + VERSION_APP;
+  document.getElementById('usuarioActualTexto').textContent = usuarioActual.Nombre;
+  cargarTodo();
+}
+
+function cargarTodo() {
+  apiCall('getAllData').then(res => {
+    if (!res.ok) { alert('Error cargando datos: ' + res.error); return; }
+    DATA = res.data;
+    localStorage.setItem('centro_ultimo_data', JSON.stringify(DATA)); // último dato bueno, para ver offline
+    renderInicio(); renderGastos(); renderInventario(); renderConfig();
+  }).catch(() => {
+    const cache = localStorage.getItem('centro_ultimo_data');
+    if (cache) { DATA = JSON.parse(cache); renderInicio(); renderGastos(); renderInventario(); renderConfig(); }
+  });
+}
+
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function linkify(s) { return escapeHtml(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+function money(n, moneda) { n = Number(n) || 0; return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (moneda || 'MXN'); }
+function hoyISO() { return new Date().toISOString().slice(0, 10); }
+
+// ============================================================================
+// NAVEGACIÓN entre vistas + tabs
+// ============================================================================
+function irAVista(nombre) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + nombre).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === nombre));
+  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', config: 'Configuración' };
+  document.getElementById('topbarTitle').textContent = titulos[nombre] || nombre;
+}
+function abrirConfig() { irAVista('config'); }
+
+// ============================================================================
+// MODALES — botón atrás de Android cierra el modal, no sale de la app (BASES_APPS)
+// ============================================================================
+function abrirModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  modalStack.push(id);
+  history.pushState({ modal: id }, '');
+}
+function cerrarModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  const i = modalStack.indexOf(id);
+  if (i > -1) modalStack.splice(i, 1);
+}
+function intentarCerrarModal(id, hayCambios) {
+  if (hayCambios === undefined) hayCambios = true; // conservador: pregunta si no se sabe
+  if (hayCambios && !confirm('¿Cerrar sin guardar los cambios?')) return;
+  cerrarModal(id);
+}
+window.addEventListener('popstate', () => {
+  if (modalStack.length) {
+    const top = modalStack.pop();
+    document.getElementById(top).classList.add('hidden');
+  }
+});
+function pedirConfirmacion(titulo, texto, onOk) {
+  document.getElementById('confirmTitulo').textContent = titulo;
+  document.getElementById('confirmTexto').textContent = texto;
+  const btn = document.getElementById('confirmBtnOk');
+  btn.onclick = () => { cerrarModal('modalConfirm'); onOk(); };
+  abrirModal('modalConfirm');
+}
+
+// ============================================================================
+// BOTÓN GUARDAR con estados (BASES_APPS §3)
+// ============================================================================
+function conEstadoGuardando(btnId, promesaFn) {
+  const btn = document.getElementById(btnId);
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  return promesaFn().then(res => {
+    if (res && res.ok === false) { btn.disabled = false; btn.textContent = original; alert('Error: ' + res.error); return res; }
+    btn.textContent = 'Guardado';
+    return res;
+  }).catch(err => { btn.disabled = false; btn.textContent = original; alert('Error: ' + err.message); });
+}
+
+// ============================================================================
+// INICIO — cuadro de IA de texto libre
+// ============================================================================
+function renderInicio() {
+  const gastosHoy = (DATA.GASTOS || []).filter(g => g.Fecha === hoyISO());
+  const totalHoy = gastosHoy.reduce((s, g) => s + (Number(g.Costo) || 0), 0);
+  const usosHoy = (DATA.USO_ROPA || []).filter(u => u.Fecha === hoyISO()).length;
+  document.getElementById('resumenHoy').innerHTML = `
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Gastado hoy</span></div><span class="lr-val">${money(totalHoy)}</span></div>
+    <div class="list-row"><div class="lr-main"><span class="lr-title">Prendas usadas hoy</span></div><span class="lr-val">${usosHoy}</span></div>
+  `;
+}
+
+const ETIQUETAS_TIPO_IA = { gasto_compra: '💰 Gasto / compra', uso_prenda: '👔 Uso de prenda', nota: '📝 Nota', acuerdo: '🤝 Acuerdo', comida: '🍽️ Comida', evento_viaje: '✈️ Evento de viaje' };
+
+function enviarTextoIA() {
+  const texto = document.getElementById('iaTexto').value.trim();
+  if (!texto) return;
+  const btn = document.getElementById('btnEnviarIA');
+  btn.disabled = true; btn.textContent = 'Pensando…';
+  apiCall('interpretarTexto', { texto: texto }).then(res => {
+    btn.disabled = false; btn.textContent = 'Entender';
+    if (!res.ok) { alert('No se pudo interpretar: ' + res.error); return; }
+    iaUltimaRespuesta = res;
+    mostrarResultadoIA(res);
+  });
+}
+
+function mostrarResultadoIA(res) {
+  const campos = res.campos || {};
+  let camposHtml = '';
+  Object.keys(campos).forEach(k => {
+    if (campos[k] === null || campos[k] === undefined) return;
+    camposHtml += `<div class="ia-field"><label>${escapeHtml(k)}</label><input data-campo="${escapeHtml(k)}" value="${escapeHtml(campos[k])}"></div>`;
+  });
+  document.getElementById('iaResultado').innerHTML = `
+    <div class="ia-result-card">
+      <div style="font-weight:600;margin-bottom:8px">${ETIQUETAS_TIPO_IA[res.tipo] || res.tipo} <span style="color:var(--ink3);font-size:11px;font-weight:400">(vía ${res.modelo})</span></div>
+      ${camposHtml}
+      <button class="btn btn-sm" style="width:100%;margin-top:6px" onclick="confirmarResultadoIA()">Guardar</button>
+    </div>`;
+}
+
+function confirmarResultadoIA() {
+  const campos = Object.assign({}, iaUltimaRespuesta.campos);
+  document.querySelectorAll('#iaResultado [data-campo]').forEach(inp => { campos[inp.dataset.campo] = inp.value; });
+  apiCall('confirmarAccionIA', { tipo: iaUltimaRespuesta.tipo, campos: campos, textoOriginal: iaUltimaRespuesta.textoOriginal }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    document.getElementById('iaTexto').value = '';
+    document.getElementById('iaResultado').innerHTML = '<p style="color:var(--green);font-size:13px;margin-top:8px">✓ Guardado</p>';
+    cargarTodo();
+  });
+}
+
+// ============================================================================
+// GASTOS
+// ============================================================================
+function renderGastos() {
+  const gastos = (DATA.GASTOS || []).slice().sort((a, b) => String(b.Fecha).localeCompare(String(a.Fecha)));
+  const totalMes = gastos.filter(g => String(g.Fecha).slice(0, 7) === hoyISO().slice(0, 7)).reduce((s, g) => s + (Number(g.Costo) || 0), 0);
+  document.getElementById('resumenGastos').innerHTML = `<div class="list-row"><div class="lr-main"><span class="lr-title">Este mes</span></div><span class="lr-val">${money(totalMes)}</span></div>`;
+  const cont = document.getElementById('listaGastos');
+  if (!gastos.length) { cont.innerHTML = '<div class="empty-state">Sin gastos todavía</div>'; return; }
+  cont.innerHTML = gastos.slice(0, 50).map(g => `
+    <div class="list-row">
+      <div class="lr-main"><span class="lr-title">${escapeHtml(g.Concepto || '(sin concepto)')}</span><span class="lr-sub">${escapeHtml(g.Fecha || '')} · ${escapeHtml(g.Tienda || '')}</span></div>
+      <span class="lr-val">${money(g.Costo, g.Moneda)}</span>
+    </div>`).join('');
+}
+
+function abrirModalGasto() {
+  document.getElementById('gConcepto').value = '';
+  document.getElementById('gCosto').value = '';
+  document.getElementById('gMoneda').value = 'MXN';
+  document.getElementById('gTienda').value = '';
+  document.getElementById('gFecha').value = hoyISO();
+  const sel = document.getElementById('gTarjeta');
+  sel.innerHTML = '<option value="">Efectivo / sin especificar</option>' + (DATA.TARJETAS || []).map(t => `<option value="${t.ID}">${escapeHtml(t.Nombre)}</option>`).join('');
+  abrirModal('modalGasto');
+}
+
+function guardarGasto() {
+  conEstadoGuardando('btnGuardarGasto', () => apiCall('saveRow', {
+    table: 'GASTOS', row: {
+      Concepto: document.getElementById('gConcepto').value,
+      Costo: document.getElementById('gCosto').value,
+      Moneda: document.getElementById('gMoneda').value || 'MXN',
+      Tienda: document.getElementById('gTienda').value,
+      TarjetaId: document.getElementById('gTarjeta').value,
+      Fecha: document.getElementById('gFecha').value,
+      FechaCaptura: new Date().toISOString(),
+      QuienCompra: usuarioActual.Nombre
+    }
+  })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); cargarTodo(); } });
+}
+
+// ============================================================================
+// INVENTARIO — árbol anidado (Alacena > Cajón chico > Caja de galletas > Hilo)
+// ============================================================================
+function renderInventario() {
+  const categorias = ['Ropa', 'Alacena', 'Mueble', 'Papeleria', 'General'];
+  const filtroCont = document.getElementById('filtroInvCategoria');
+  filtroCont.innerHTML = '<span class="pill' + (invCategoriaFiltro === '' ? ' on' : '') + '" onclick="filtrarInvCategoria(\'\')">Todo</span>' +
+    categorias.map(c => `<span class="pill${invCategoriaFiltro === c ? ' on' : ''}" onclick="filtrarInvCategoria('${c}')">${c}</span>`).join('');
+  renderInvArbol();
+}
+function filtrarInvCategoria(c) { invCategoriaFiltro = c; invPadreActual = ''; renderInventario(); }
+
+function renderInvArbol() {
+  const items = (DATA.INVENTARIO || []);
+  const hijos = items.filter(i => String(i.UbicacionPadreId || '') === String(invPadreActual) && (!invCategoriaFiltro || i.Categoria === invCategoriaFiltro || String(i.EsUbicacion) === 'true'));
+  renderBreadcrumb(items);
+  const cont = document.getElementById('invArbol');
+  if (!hijos.length) { cont.innerHTML = '<div class="empty-state">Vacío — agrega un objeto o una carpeta</div>'; return; }
+  const carpetas = hijos.filter(i => String(i.EsUbicacion) === 'true');
+  const objetos = hijos.filter(i => String(i.EsUbicacion) !== 'true');
+  cont.innerHTML =
+    carpetas.map(c => {
+      const cuenta = items.filter(i => String(i.UbicacionPadreId) === String(c.ID)).length;
+      return `<div class="folder-row" onclick="entrarCarpeta('${c.ID}')"><span class="folder-icon">📁</span><span class="lr-title">${escapeHtml(c.Nombre)}</span><span class="count">${cuenta}</span><span class="chevron">›</span></div>`;
+    }).join('') +
+    objetos.map(o => `
+      <div class="folder-row" onclick="verItemInventario('${o.ID}')">
+        <span class="folder-icon">${o.FotoURL ? '🖼️' : '📦'}</span>
+        <div class="lr-main"><span class="lr-title">${escapeHtml(o.Nombre)}</span><span class="lr-sub">${escapeHtml(o.Categoria || '')}${o.Cantidad ? ' · ' + escapeHtml(o.Cantidad) : ''}</span></div>
+      </div>`).join('');
+}
+
+function renderBreadcrumb(items) {
+  const cadena = [];
+  let actual = invPadreActual;
+  while (actual) {
+    const fila = items.find(i => String(i.ID) === String(actual));
+    if (!fila) break;
+    cadena.unshift(fila);
+    actual = fila.UbicacionPadreId;
+  }
+  const bc = document.getElementById('invBreadcrumb');
+  bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + cadena.map(f => ` › <span onclick="entrarCarpeta('${f.ID}')">${escapeHtml(f.Nombre)}</span>`).join('');
+}
+function irRaizInventario() { invPadreActual = ''; renderInvArbol(); }
+function entrarCarpeta(id) { invPadreActual = id; renderInvArbol(); }
+
+function verItemInventario(id) {
+  const item = (DATA.INVENTARIO || []).find(i => i.ID === id);
+  if (!item) return;
+  pedirConfirmacion(item.Nombre, '¿Qué quieres hacer con este objeto?', () => {});
+  // acción rápida: eliminar (mandar a papelera)
+  document.getElementById('confirmTexto').textContent = (item.Notas || item.Categoria || '') + ' — ¿Eliminar (se va a la papelera)?';
+  document.getElementById('confirmBtnOk').onclick = () => { cerrarModal('modalConfirm'); apiCall('deleteRow', { table: 'INVENTARIO', id: id, usuario: usuarioActual.Nombre }).then(cargarTodo); };
+}
+
+function setTipoInventario(esCarpeta) {
+  tipoInventarioEsCarpeta = esCarpeta;
+  document.getElementById('pillItem').classList.toggle('on', !esCarpeta);
+  document.getElementById('pillCarpeta').classList.toggle('on', esCarpeta);
+  document.getElementById('campoCategoriaInv').classList.toggle('hidden', esCarpeta);
+  document.getElementById('campoCantidadInv').classList.toggle('hidden', esCarpeta);
+}
+function abrirModalInventario() {
+  document.getElementById('invNombre').value = '';
+  document.getElementById('invCantidad').value = '';
+  const sel = document.getElementById('invCategoria');
+  sel.innerHTML = (DATA.CATALOGOS || []).filter(c => c.Tipo === 'InventarioCategoria').map(c => `<option value="${escapeHtml(c.Nombre)}">${c.Emoji || ''} ${escapeHtml(c.Nombre)}</option>`).join('') || '<option value="General">General</option>';
+  setTipoInventario(false);
+  document.getElementById('invModalTitulo').textContent = invPadreActual ? 'Nuevo dentro de esta carpeta' : 'Nuevo en inventario';
+  abrirModal('modalInventario');
+}
+function guardarInventario() {
+  const nombre = document.getElementById('invNombre').value.trim();
+  if (!nombre) return;
+  conEstadoGuardando('btnGuardarInventario', () => apiCall('saveRow', {
+    table: 'INVENTARIO', row: {
+      Nombre: nombre, EsUbicacion: tipoInventarioEsCarpeta,
+      Categoria: tipoInventarioEsCarpeta ? (DATA.INVENTARIO.find(i => i.ID === invPadreActual) || {}).Categoria || 'General' : document.getElementById('invCategoria').value,
+      Cantidad: document.getElementById('invCantidad').value,
+      UbicacionPadreId: invPadreActual, Usuario: usuarioActual.Nombre
+    }
+  })).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); cargarTodo(); } });
+}
+
+// ============================================================================
+// CONFIGURACIÓN — tarjetas, categorías, mejoras, papelera (BASES_APPS §12)
+// ============================================================================
+function renderConfig() {
+  document.getElementById('listaTarjetas').innerHTML = (DATA.TARJETAS || []).map(t => `
+    <div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(t.Nombre)}</span><span class="lr-sub">${escapeHtml(t.Banco || '')}</span></div>
+    <button class="btn btn-sec btn-sm" onclick="eliminarCatalogo('TARJETAS','${t.ID}')">Quitar</button></div>`).join('') || '<div class="empty-state">Sin tarjetas</div>';
+
+  document.getElementById('listaCategoriasInv').innerHTML = (DATA.CATALOGOS || []).filter(c => c.Tipo === 'InventarioCategoria').map(c => `
+    <div class="list-row"><div class="lr-main"><span class="lr-title">${c.Emoji || ''} ${escapeHtml(c.Nombre)}</span></div>
+    <button class="btn btn-sec btn-sm" onclick="eliminarCatalogo('CATALOGOS','${c.ID}')">Quitar</button></div>`).join('') || '<div class="empty-state">Sin categorías — agrega Ropa, Alacena, Mueble, Papelería...</div>';
+
+  document.getElementById('listaMejoras').innerHTML = (DATA.MEJORAS || []).slice().reverse().map(m => `
+    <div class="list-row"><div class="lr-main"><span class="lr-title linkify">${linkify(m.Texto)}</span><span class="lr-sub">${escapeHtml(m.Fecha || '').slice(0, 10)}</span></div>
+    <span><button class="btn btn-sec btn-sm" onclick="navigator.clipboard.writeText('${escapeHtml(m.Texto).replace(/'/g, "\\'")}')">Copiar</button> <button class="btn btn-danger btn-sm" onclick="eliminarCatalogo('MEJORAS','${m.ID}')">Eliminar</button></span></div>`).join('');
+
+  document.getElementById('listaPapelera').innerHTML = (DATA.PAPELERA || []).map(p => {
+    const datos = JSON.parse(p.DatosJSON || '{}');
+    return `<div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(p.Tabla)}: ${escapeHtml(datos.Nombre || datos.Concepto || datos.Titulo || p.ID)}</span><span class="lr-sub">${escapeHtml(p.FechaEliminacion || '').slice(0, 10)}</span></div>
+    <span><button class="btn btn-sec btn-sm" onclick="restaurarPapelera('${p.ID}')">Restaurar</button></span></div>`;
+  }).join('') || '<div class="empty-state">Papelera vacía</div>';
+}
+function eliminarCatalogo(tabla, id) {
+  pedirConfirmacion('Eliminar', '¿Eliminar este elemento?', () => apiCall('deleteRow', { table: tabla, id: id, usuario: usuarioActual.Nombre }).then(cargarTodo));
+}
+function restaurarPapelera(id) { apiCall('restaurarDeTrash', { id: id }).then(cargarTodo); }
+
+function abrirModalTarjeta() { document.getElementById('tNombre').value = ''; document.getElementById('tBanco').value = ''; abrirModal('modalTarjeta'); }
+function guardarTarjeta() {
+  const nombre = document.getElementById('tNombre').value.trim();
+  if (!nombre) return;
+  apiCall('saveRow', { table: 'TARJETAS', row: { Nombre: nombre, Banco: document.getElementById('tBanco').value, Usuario: usuarioActual.Nombre } }).then(res => { if (res.ok) { cerrarModal('modalTarjeta'); cargarTodo(); } });
+}
+
+function abrirModalCategoriaInv() { document.getElementById('cNombre').value = ''; document.getElementById('cEmoji').value = ''; abrirModal('modalCategoriaInv'); }
+function guardarCategoriaInv() {
+  const nombre = document.getElementById('cNombre').value.trim();
+  if (!nombre) return;
+  apiCall('saveRow', { table: 'CATALOGOS', row: { Tipo: 'InventarioCategoria', Nombre: nombre, Emoji: document.getElementById('cEmoji').value } }).then(res => { if (res.ok) { cerrarModal('modalCategoriaInv'); cargarTodo(); } });
+}
+
+function agregarMejora() {
+  const texto = document.getElementById('inpMejoraTexto').value.trim();
+  if (!texto) return;
+  apiCall('saveRow', { table: 'MEJORAS', row: { Texto: texto, Fecha: new Date().toISOString(), Usuario: usuarioActual.Nombre } }).then(res => {
+    if (res.ok) { document.getElementById('inpMejoraTexto').value = ''; cargarTodo(); }
+  });
+}
+
+function forzarActualizacion() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  caches && caches.keys && caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  location.href = location.pathname + '?v=' + Date.now();
+}
+
+function exportarRespaldo() {
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'centro-respaldo-' + hoyISO() + '.json';
+  a.click();
+}
+</script>
+</body>
+</html>
