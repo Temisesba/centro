@@ -234,6 +234,7 @@ a{color:var(--accent)}
     <div class="fin-row-actions" style="margin-bottom:12px">
       <button class="btn btn-sec btn-sm" onclick="finOpen()">💳 Finanzas (vault)</button>
       <button class="btn btn-sec btn-sm" onclick="lisAbrir()">🛒 Lista de compras</button>
+      <button class="btn btn-sec btn-sm" onclick="estAbrir()">📊 Estadísticas</button>
     </div>
     <div class="section-title">Movimientos</div>
     <div class="card" id="listaGastos"><div class="loading">Cargando…</div></div>
@@ -249,6 +250,11 @@ a{color:var(--accent)}
       </div>
     </div>
     <div class="card" id="listaCompras"><div class="loading">Cargando…</div></div>
+  </div>
+
+  <!-- ---- ESTADÍSTICAS ---- -->
+  <div class="view" id="view-estadisticas">
+    <div id="estContenido"><div class="loading">Cargando…</div></div>
   </div>
 
   <!-- ---- FINANZAS PERSONALES (vault de Gastos — transplante real) ---- -->
@@ -606,7 +612,7 @@ a{color:var(--accent)}
 // de campo REALES de cada app (ej. getGastos devuelve "concepto"/"costo"/
 // "quien_paga", no un esquema genérico inventado).
 // ============================================================================
-const VERSION_APP = 'Sexta piedra — lista de compras';
+const VERSION_APP = 'Séptima piedra — presupuesto y estadísticas';
 let webAppUrl = localStorage.getItem('centro_webAppUrl') || '';
 let usuarioActual = JSON.parse(localStorage.getItem('centro_usuario') || 'null');
 let DATA = {}; // { gastos:[...], ropa:{...}, acuerdos:{...}, comidas:{...}, appCompleta:{...} }
@@ -789,7 +795,7 @@ function irAVista(nombre) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + nombre).classList.add('active');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === nombre));
-  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', finanzas: 'Finanzas', lista: 'Lista de compras', config: 'Configuración' };
+  const titulos = { inicio: 'Inicio', gastos: 'Gastos', inventario: 'Inventario', ropa: 'Ropa', comidas: 'Comidas', acuerdos: 'Acuerdos', viajes: 'Itinerario', notas: 'Notas', finanzas: 'Finanzas', lista: 'Lista de compras', estadisticas: 'Estadísticas', config: 'Configuración' };
   document.getElementById('topbarTitle').textContent = titulos[nombre] || nombre;
 }
 function abrirConfig() { irAVista('config'); }
@@ -1563,6 +1569,43 @@ function finDelItem(id) {
 }
 
 // ---- RESUMEN ----
+// ---- presupuesto mensual (local al dispositivo, igual que el original) ----
+function finPresupuestoConfig() { try { return JSON.parse(localStorage.getItem('centro_presupuesto_' + finOwner) || 'null'); } catch (e) { return null; } }
+function finGuardarPresupuestoConfig(cfg) { try { localStorage.setItem('centro_presupuesto_' + finOwner, JSON.stringify(cfg)); } catch (e) {} }
+function finPresupuestoMensual() {
+  const cfg = finPresupuestoConfig(); if (!cfg) return 0;
+  if (cfg.modo === 'monto') return parseFloat(cfg.monto) || 0;
+  if (cfg.modo === 'porcentaje') return (parseFloat(cfg.salario) || 0) * (parseFloat(cfg.porcentaje) || 0) / 100;
+  return 0;
+}
+function finAcumuladoMes() {
+  const mk = finMesKey(); const me = usuarioActual.Nombre;
+  let total = 0;
+  (DATA.gastos || []).filter(g => g.tipoFila !== 'producto' && String(g.fecha || '').slice(0, 7) === mk && g.compartido !== 'Cotizacion').forEach(g => {
+    const a = parseFloat(g.costo) || 0;
+    if (g.compartido === 'Compartido') {
+      const parts = sesParticipantesEf(g); const n = parts.length || 1;
+      if (parts.includes(me)) total += a / n;
+    } else if (g.quien_paga === me) total += a;
+  });
+  return total;
+}
+function finAbrirConfigPresupuesto() {
+  const cfg = finPresupuestoConfig();
+  const modo = (prompt('¿Cómo quieres fijar tu presupuesto mensual?\n\n1 = Monto fijo\n2 = % de tu salario\n3 = Quitar presupuesto\n\nEscribe 1, 2 o 3:', cfg && cfg.modo === 'porcentaje' ? '2' : '1') || '').trim();
+  if (modo === '3') { localStorage.removeItem('centro_presupuesto_' + finOwner); showToast('Presupuesto desactivado'); finRender(); return; }
+  if (modo === '1') {
+    const monto = parseFloat(prompt('Presupuesto mensual:', (cfg && cfg.monto) || '')); if (!monto) { showToast('Pon un monto'); return; }
+    finGuardarPresupuestoConfig({ modo: 'monto', monto });
+  } else if (modo === '2') {
+    const salario = parseFloat(prompt('Tu salario mensual (privado, no se muestra en resúmenes):', (cfg && cfg.salario) || ''));
+    const porcentaje = parseFloat(prompt('Porcentaje a presupuestar (%):', (cfg && cfg.porcentaje) || '30'));
+    if (!salario || !porcentaje) { showToast('Pon tu salario y el porcentaje'); return; }
+    finGuardarPresupuestoConfig({ modo: 'porcentaje', salario, porcentaje });
+  } else return;
+  showToast('✓ Presupuesto configurado');
+  finRender();
+}
 function finRenderResumen() {
   const ingresos = finItemsOf('ingreso').reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
   const fijosMes = finItemsOf('fijo').reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
@@ -1580,6 +1623,18 @@ function finRenderResumen() {
     ${stat('', '📈 Ingresos', money(ingresos), '')}
     ${stat('', '🔁 Fijos + MSI este mes', money(fijosMes + msiMes), '')}
   </div>`;
+  const presupuesto = finPresupuestoMensual();
+  if (presupuesto > 0) {
+    const acumulado = finAcumuladoMes();
+    const pct = Math.min(100, Math.round((acumulado / presupuesto) * 100));
+    html += `<div class="section-title">🎯 Presupuesto del mes</div><div class="card">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span>${money(acumulado)} de ${money(presupuesto)}</span><span style="font-weight:700;color:${pct >= 100 ? 'var(--red)' : (pct >= 90 ? 'var(--orange)' : 'var(--green)')}">${pct}%</span></div>
+      <div class="fin-progress"><div style="width:${pct}%;background:${pct >= 100 ? 'var(--red)' : (pct >= 90 ? 'var(--orange)' : 'var(--green)')}"></div></div>
+      <button class="fin-mini-btn" style="margin-top:8px" onclick="finAbrirConfigPresupuesto()">⚙️ Ajustar</button>
+    </div>`;
+  } else {
+    html += `<div class="section-title">🎯 Presupuesto del mes</div><div class="card"><button class="btn btn-sec btn-sm" style="width:100%" onclick="finAbrirConfigPresupuesto()">＋ Configurar presupuesto mensual</button></div>`;
+  }
   if (inversiones.length) {
     html += `<div class="section-title">💼 Inversiones</div><div class="card">` +
       inversiones.map(i => `<div class="list-row"><div class="lr-main"><span class="lr-title">${escapeHtml(i.nombre || '—')}</span><span class="lr-sub">${i.institucion ? escapeHtml(i.institucion) : ''}</span></div><span class="lr-val">${money(i.valorActual)}</span></div>`).join('') +
@@ -3264,6 +3319,47 @@ function lisEliminar(idx) {
   pedirConfirmacion('Eliminar', '¿Quitar "' + lisItems[idx].item + '" de la lista?', () => { lisItems.splice(idx, 1); lisRender(); lisGuardar(); });
 }
 function lisGuardar() { apiCall('saveShopping', { sesion: sesActiva || '', listaId: '', esDefault: true, items: lisItems }); }
+
+// ============================================================================
+// ESTADÍSTICAS — versión compacta de renderStats() del original: total
+// general, reparto por persona (si hay sesión activa) y total por mes. Sin
+// el histórico día/semana/mes en acordeón ni el modo "Personal entre
+// sesiones" — eso depende de una agregación multi-sesión que Centro no
+// tiene todavía (ver getMisGastos en el original).
+// ============================================================================
+function estAbrir() { irAVista('estadisticas'); estRender(); }
+function estRender() {
+  const host = document.getElementById('estContenido'); if (!host) return;
+  const gastos = (DATA.gastos || []).filter(g => g.tipoFila !== 'producto' && g.compartido !== 'Cotizacion');
+  let porMiembroHtml = '';
+  if (sesMiembros.length >= 2) {
+    const memEff = {}; sesMiembros.forEach(m => memEff[m] = { personal: 0, shared: 0 });
+    let totalCompartido = 0;
+    gastos.forEach(g => {
+      const a = parseFloat(g.costo) || 0;
+      if (g.compartido === 'Compartido') {
+        totalCompartido += a;
+        const parts = sesParticipantesEf(g); const n = parts.length || 1;
+        parts.forEach(p => { if (memEff[p]) memEff[p].shared += a / n; });
+      } else if (g.quien_paga && memEff[g.quien_paga]) memEff[g.quien_paga].personal += a;
+    });
+    porMiembroHtml = `<div class="section-title">Por persona</div><div class="fin-stats">` +
+      sesMiembros.map(m => `<div class="fin-stat"><div class="fs-label">${escapeHtml(m)}</div><div class="fs-val">${money(memEff[m].personal + memEff[m].shared)}</div><div class="fs-sub">personal ${money(memEff[m].personal)} + compartido ${money(memEff[m].shared)}</div></div>`).join('') +
+      `<div class="fin-stat"><div class="fs-label">🤝 Total compartido</div><div class="fs-val">${money(totalCompartido)}</div></div></div>`;
+  }
+  const porMes = {};
+  gastos.forEach(g => { const mk = String(g.fecha || '').slice(0, 7); if (!mk) return; porMes[mk] = (porMes[mk] || 0) + (parseFloat(g.costo) || 0); });
+  const meses = Object.keys(porMes).sort().reverse().slice(0, 6);
+  const maxMes = Math.max(...meses.map(m => porMes[m]), 1);
+  const mesesHtml = meses.map(mk => {
+    const pct = Math.round((porMes[mk] / maxMes) * 100);
+    return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12.5px"><span>${escapeHtml(mk)}</span><strong>${money(porMes[mk])}</strong></div><div class="fin-progress"><div style="width:${pct}%;background:var(--accent)"></div></div></div>`;
+  }).join('') || '<div class="empty-state">Sin datos todavía</div>';
+  const totalGeneral = gastos.reduce((s, g) => s + (parseFloat(g.costo) || 0), 0);
+  host.innerHTML = `<div class="card"><div class="lr-main"><span class="lr-title">Total general${sesActiva ? (' · ' + escapeHtml(sesActiva)) : ''}</span></div><div style="font-size:22px;font-weight:700;margin-top:4px">${money(totalGeneral)}</div></div>` +
+    porMiembroHtml +
+    `<div class="section-title">Por mes</div><div class="card">${mesesHtml}</div>`;
+}
 </script>
 </body>
 </html>
