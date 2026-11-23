@@ -305,6 +305,7 @@ a{color:var(--accent)}
     <div class="pill-group" id="rpTabs" style="margin-bottom:14px">
       <span class="pill on" data-sec="catalogo" onclick="rpSetSection('catalogo')">👕 Catálogo</span>
       <span class="pill" data-sec="vestidor" onclick="rpSetSection('vestidor')">👗 Vestidor</span>
+      <span class="pill" data-sec="ideas" onclick="rpSetSection('ideas')">✨ Ideas</span>
     </div>
     <div id="rpContent"><div class="loading">Cargando…</div></div>
     <button class="fab" id="rpFab" onclick="abrirModalPrenda()">+</button>
@@ -1578,7 +1579,9 @@ function rpSetSection(sec) {
   rpRender();
 }
 function rpRender() {
-  if (rpSection === 'catalogo') rpRenderCatalogo(); else rpRenderVestidor();
+  if (rpSection === 'catalogo') rpRenderCatalogo();
+  else if (rpSection === 'ideas') rpRenderIdeas();
+  else rpRenderVestidor();
 }
 function rpRenderCatalogo() {
   const prendas = rpPrendasActivas();
@@ -1836,6 +1839,90 @@ function rpGuardarOutfit() {
   if (!ids.length) { showToast('Agrega al menos una prenda'); return; }
   const nota = prompt('¿Notas para este outfit? (opcional)') || '';
   apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: hoyISO(), PrendaIDsJSON: JSON.stringify(ids), Motivo: nota, Papelera: false } }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    showToast('✓ Outfit guardado');
+  });
+}
+
+// ---- Vestidor: Ideas (sugerirOutfit — IA propone combos desde cero) ----
+const RP_WEATHER_CODES = { 0: 'despejado', 1: 'poco nublado', 2: 'parcialmente nublado', 3: 'nublado', 45: 'niebla', 48: 'niebla',
+  51: 'llovizna', 53: 'llovizna', 55: 'llovizna', 61: 'lluvia', 63: 'lluvia', 65: 'lluvia', 71: 'nieve', 73: 'nieve', 75: 'nieve',
+  80: 'chubascos', 81: 'chubascos', 82: 'chubascos', 95: 'tormenta' };
+function rpRenderIdeas() {
+  const el = document.getElementById('rpContent');
+  el.innerHTML = `
+    <div class="card">
+      <div class="field"><label class="hint">Evento</label>
+        <select id="rpIdeasEvento" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          ${['Casual', 'Trabajo', 'Formal', 'Deportivo', 'Cita', 'Fiesta', 'Otro'].map(o => `<option>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="hint">Clima</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="rpIdeasClima" placeholder="Ej: 22°C, soleado" style="flex:1;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <button class="btn btn-sec btn-sm" onclick="rpUsarClimaAutomatico()">📍</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="hint">Algo más para la IA (opcional)</label>
+        <input type="text" id="rpIdeasNota" placeholder="Ej: quiero usar mi chamarra azul…" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+      </div>
+      <button class="btn" style="margin-top:10px" onclick="rpPedirIdeas()">✨ Pedir ideas</button>
+    </div>
+    <div id="rpIdeasResultados" style="margin-top:14px"></div>`;
+}
+function rpUsarClimaAutomatico() {
+  if (!navigator.geolocation) { showToast('Tu navegador no soporta ubicación'); return; }
+  showToast('Buscando tu ubicación…');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const { latitude, longitude } = pos.coords;
+    try {
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weathercode&timezone=auto`);
+      const d = await r.json();
+      const temp = Math.round(d.current.temperature_2m);
+      const cond = RP_WEATHER_CODES[d.current.weathercode] || '';
+      document.getElementById('rpIdeasClima').value = `${temp}°C, ${cond}`;
+      showToast('Clima actualizado');
+    } catch (e) { showToast('No se pudo obtener el clima'); }
+  }, () => showToast('No se pudo acceder a tu ubicación'));
+}
+async function rpPedirIdeas() {
+  const evento = document.getElementById('rpIdeasEvento').value;
+  const clima = document.getElementById('rpIdeasClima').value.trim();
+  const nota = document.getElementById('rpIdeasNota').value.trim();
+  const perfil = ((DATA.ropa && DATA.ropa.perfil) || [])[0] || {};
+  const wrap = document.getElementById('rpIdeasResultados');
+  wrap.innerHTML = '<p class="hint">Pensando outfits…</p>';
+  const r = await apiCall('sugerirOutfit', { evento, clima, nota, tonoPiel: perfil.TonoPiel || '', subtono: perfil.Subtono || '' });
+  if (!r.ok) { wrap.innerHTML = `<p class="hint">No se pudo generar ideas: ${escapeHtml(r.error || 'sin conexión')}</p>`; return; }
+  if (!r.outfits || !r.outfits.length) { wrap.innerHTML = '<p class="hint">La IA no encontró combinaciones — agrega más prendas al catálogo.</p>'; return; }
+  const ideas = r.outfits.map(o => ({ motivo: o.motivo, prendaIds: (o.prendaIds || []).filter(id => rpFindPrenda(id)) })).filter(o => o.prendaIds.length);
+  if (!ideas.length) { wrap.innerHTML = '<p class="hint">La IA no encontró combinaciones usables con tu catálogo actual.</p>'; return; }
+  const maniqui = await rpObtenerManiquiBase(rpGenero());
+  wrap.innerHTML = ideas.map((o, i) => {
+    const prendas = o.prendaIds.map(id => rpFindPrenda(id)).filter(Boolean);
+    const capasHtml = (maniqui && maniqui.url)
+      ? `<img class="rp-doll-img" src="${maniqui.url}">` + prendas.map(p => p.FotoGeneradaURL ? `<img class="rp-doll-img" src="${p.FotoGeneradaURL}">` : '').join('')
+      : '<p class="hint" style="padding:30px 0;text-align:center">No se pudo cargar el maniquí</p>';
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="rp-doll-wrap" style="max-width:200px;margin:0 auto">${capasHtml}</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${prendas.map(p => rpFotoHtml(p, { estilo: 'height:56px;flex:none', clickable: false })).join('')}</div>
+      <div class="hint" style="font-size:13px">${escapeHtml(o.motivo || '')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-sec btn-sm" onclick='rpUsarIdeaHoy(${JSON.stringify(o.prendaIds)}, ${JSON.stringify(evento)})'>Usar hoy</button>
+        <button class="btn btn-sec btn-sm" onclick='rpGuardarIdea(${JSON.stringify(o.prendaIds)}, ${JSON.stringify(o.motivo || '')}, ${JSON.stringify(evento)})'>💾 Guardar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function rpUsarIdeaHoy(prendaIds, evento) {
+  apiCall('registrarUso', { prendaIds, fecha: hoyISO(), evento }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    showToast('✓ Registrado como lo que usaste hoy');
+    cargarTodo();
+  });
+}
+function rpGuardarIdea(prendaIds, motivo, evento) {
+  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: '', PrendaIDsJSON: JSON.stringify(prendaIds), Motivo: motivo || '', Evento: evento || '', Papelera: false } }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
     showToast('✓ Outfit guardado');
   });
