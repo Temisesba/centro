@@ -447,6 +447,11 @@ a{color:var(--accent)}
 <div id="modalGasto" class="modal-overlay hidden" onclick="if(event.target===this) finCancelarModalGasto()">
   <div class="modal-sheet">
     <div class="modal-title">Nuevo gasto</div>
+    <div class="field">
+      <input type="file" accept="image/*" id="gTicketInput" style="display:none" onchange="gEscanearTicket(event)">
+      <button class="btn btn-sec" id="gBtnEscanear" onclick="document.getElementById('gTicketInput').click()">📷 Escanear ticket (la IA llena los datos)</button>
+      <div id="gTicketBanner"></div>
+    </div>
     <div class="field"><label>Concepto</label><input id="gConcepto" type="text"></div>
     <div class="field"><label>Costo</label><input id="gCosto" type="number" step="0.01"></div>
     <div class="field"><label>Moneda</label><input id="gMoneda" type="text" value="MXN"></div>
@@ -482,6 +487,7 @@ a{color:var(--accent)}
     </div>
     <div class="field"><label>Notas (opcional)</label><textarea id="gNotas" style="min-height:40px"></textarea></div>
     <div class="field"><label>Fecha</label><input id="gFecha" type="date"></div>
+    <div id="gProductosArea"></div>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="finCancelarModalGasto()">Cancelar</button>
       <button class="btn" id="btnGuardarGasto" onclick="guardarGasto()">Guardar</button>
@@ -998,26 +1004,135 @@ function abrirModalGasto() {
     sesRenderParticipantesPills();
   }
   document.getElementById('gParticipantesWrap').classList.add('hidden');
+  gProdDraft = [];
+  gFotoTicketDataUrl = null;
+  document.getElementById('gTicketBanner').innerHTML = '';
+  document.getElementById('gBtnEscanear').textContent = '📷 Escanear ticket (la IA llena los datos)';
+  gRenderProductos();
   abrirModal('modalGasto');
+}
+// ---- escanear ticket con IA: llena el formulario Y separa cada producto
+// en su propia fila (Gemini primero; si falla, ofrece Claude) ----
+let gProdDraft = [];
+let gFotoTicketDataUrl = null;
+async function gEscanearTicket(e) {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const resized = await rpResizeImageFile(f, 1280, 0.85);
+  gFotoTicketDataUrl = resized.dataUrl;
+  await gAnalizarTicketIA('analyzeGemini', resized.base64, resized.mimeType);
+}
+async function gAnalizarTicketIA(accion, base64, mimeType) {
+  const btn = document.getElementById('gBtnEscanear');
+  const banner = document.getElementById('gTicketBanner');
+  btn.disabled = true; btn.textContent = 'Analizando…';
+  const r = await apiCall(accion, { base64, mimeType, moneda_local: 'MXN', moneda_conv: 'MXN' });
+  btn.disabled = false; btn.textContent = '🤖 Releer con IA';
+  if (!r.ok) {
+    banner.innerHTML = `<p class="hint" style="color:var(--red)">⚠ ${escapeHtml(r.error || 'sin conexión')}. ${accion === 'analyzeGemini' ? '<a href="javascript:void(0)" onclick=\'gAnalizarTicketIA("analyzeClaude",' + JSON.stringify(base64) + ',' + JSON.stringify(mimeType) + ')\'>¿Intentar con Claude?</a>' : ''}</p>`;
+    return;
+  }
+  banner.innerHTML = '';
+  gRellenarDesdeIA(r.result, base64, mimeType);
+  showToast('✨ IA llenó los datos' + (gProdDraft.length ? ' + ' + gProdDraft.length + ' producto(s)' : ''));
+}
+function gRellenarDesdeIA(res, base64, mimeType) {
+  if (res.monto) document.getElementById('gCosto').value = res.monto;
+  if (res.concepto) document.getElementById('gConcepto').value = res.concepto;
+  if (res.tienda) document.getElementById('gTienda').value = res.tienda;
+  if (res.fecha) document.getElementById('gFecha').value = String(res.fecha).slice(0, 10);
+  if (res.categoria) document.getElementById('gCategoria').value = res.categoria;
+  if (res.notas && res.notas !== 'null') {
+    const ex = document.getElementById('gNotas').value.trim();
+    document.getElementById('gNotas').value = ex ? ex + ' · ' + res.notas : res.notas;
+  }
+  if (Array.isArray(res.productos) && res.productos.length) {
+    gProdDraft = res.productos.map(p => ({
+      concepto: String(p.producto || p.nombre || '').trim(),
+      cantidad: p.cantidad != null ? String(p.cantidad) : '',
+      unidad: String(p.unidad || 'unidad'),
+      precioInd: p.precio != null ? String(p.precio) : '',
+      categoria: String(p.categoria_producto || p.categoria || '').trim(),
+      ubicacion: '',
+      grupo: 'Alacena',
+      inventario: true
+    })).filter(p => p.concepto);
+  }
+  gRenderProductos();
+}
+function gRenderProductos() {
+  const cont = document.getElementById('gProductosArea'); if (!cont) return;
+  if (!gProdDraft.length) { cont.innerHTML = ''; return; }
+  cont.innerHTML = `<p class="hint" style="margin-top:10px;margin-bottom:6px">Productos del ticket (se guardan en Inventario):</p>` +
+    gProdDraft.map((p, i) => `
+    <div class="list-row" style="flex-wrap:wrap;gap:6px">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+        <input type="text" value="${escapeHtml(p.concepto)}" placeholder="Producto" oninput="gProdDraft[${i}].concepto=this.value" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+        <div style="display:flex;gap:4px">
+          <input type="text" value="${escapeHtml(p.cantidad)}" placeholder="Cant." style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)" oninput="gProdDraft[${i}].cantidad=this.value">
+          <input type="text" value="${escapeHtml(p.precioInd)}" placeholder="Precio" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)" oninput="gProdDraft[${i}].precioInd=this.value">
+        </div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <select onchange="gProdDraft[${i}].grupo=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+            <option ${p.grupo === 'Alacena' ? 'selected' : ''}>Alacena</option>
+            <option ${p.grupo === 'General' ? 'selected' : ''}>General</option>
+          </select>
+          <input type="text" value="${escapeHtml(p.ubicacion)}" placeholder="Ubicación" oninput="gProdDraft[${i}].ubicacion=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <button class="btn btn-sec btn-sm" onclick="gProdSugerirUbicacion(${i})" title="Que la IA sugiera dónde">✨</button>
+        </div>
+      </div>
+      <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="gProdDraft.splice(${i},1); gRenderProductos()">🗑</button>
+    </div>`).join('') +
+    `<p class="hint" style="font-size:11px;margin-top:4px">¿Compraste ropa? Agrégala directo desde 👗 Ropa → ＋ (necesita su propia foto de la prenda, no la del ticket).</p>`;
+}
+async function gProdSugerirUbicacion(i) {
+  const nombre = gProdDraft[i].concepto.trim();
+  if (!nombre) { showToast('Escribe primero el nombre del producto'); return; }
+  const descsRes = await apiCall('getInvFolderDescs', {});
+  const descs = (descsRes && descsRes.descs) || {};
+  const carpetas = invTodasLasCarpetas().filter(Boolean).map(path => ({ path, descripcion: descs[path] || '' }));
+  if (!carpetas.length) { showToast('Todavía no tienes carpetas para sugerir'); return; }
+  showToast('Pensando…');
+  const r = await apiCall('sugerirUbicacionInventario', { nombre, carpetas });
+  if (!r.ok) { showToast('No se pudo sugerir: ' + (r.error || 'sin conexión')); return; }
+  if (!r.sugerencia) { showToast('La IA no encontró una carpeta clara para "' + nombre + '"'); return; }
+  pedirConfirmacion('¿Guardarlo aquí?', '"' + nombre + '" → ' + r.sugerencia, () => {
+    gProdDraft[i].ubicacion = r.sugerencia;
+    gRenderProductos();
+    showToast('✓ Ubicación aplicada');
+  });
 }
 function guardarGasto() {
   const esSesion = sesMiembros.length >= 2;
   const tipo = esSesion ? document.getElementById('gTipo').value : 'Personal';
   const quienPaga = esSesion ? document.getElementById('gQuienPaga').value : usuarioActual.Nombre;
   const participantes = (esSesion && tipo !== 'Personal') ? sesParticipantesElegidos() : [];
+  const tienda = document.getElementById('gTienda').value;
+  const fecha = document.getElementById('gFecha').value;
   conEstadoGuardando('btnGuardarGasto', () => apiCall('saveGasto', {
     concepto: document.getElementById('gConcepto').value,
     costo: document.getElementById('gCosto').value,
     moneda: document.getElementById('gMoneda').value || 'MXN',
-    tienda: document.getElementById('gTienda').value,
+    tienda: tienda,
     pago: finPagoBuildGasto(),
     categoria: document.getElementById('gCategoria').value,
     notas: document.getElementById('gNotas').value,
-    fecha: document.getElementById('gFecha').value,
+    fecha: fecha,
     quien_paga: quienPaga,
     compartido: tipo,
     participantes: participantes,
-    sesion: sesActiva
+    sesion: sesActiva,
+    foto_ticket: gFotoTicketDataUrl || undefined
+  }).then(res => {
+    if (res && res.ok && gProdDraft.length) {
+      return apiCall('saveProductos', {
+        sesion: sesActiva, compraId: 'gasto-' + res.rowIndex, tienda, fecha, quien: quienPaga,
+        productos: gProdDraft.map(p => ({
+          concepto: p.concepto, cantidad: p.cantidad, unidad: p.unidad, precioInd: p.precioInd,
+          categoria: p.categoria, ubicacion: p.ubicacion, grupo: p.grupo, inventario: p.inventario ? 'SI' : ''
+        }))
+      }).then(() => res);
+    }
+    return res;
   })).then(res => { if (res && res.ok) { cerrarModal('modalGasto'); finTrasGuardarGasto(res); cargarTodo(); } });
 }
 
