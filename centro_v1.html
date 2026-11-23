@@ -500,8 +500,20 @@ a{color:var(--accent)}
         <span class="pill" id="pillGeneral" onclick="elegirGrupoInv('General')">General</span>
       </div>
     </div>
-    <div class="field"><label>Ubicación (ej. Alacena/Cajón chico/Caja de galletas)</label><input id="invUbicacion" type="text"></div>
+    <div class="field"><label>Ubicación (ej. Alacena/Cajón chico/Caja de galletas)</label>
+      <div style="display:flex;gap:6px">
+        <input id="invUbicacion" type="text" style="flex:1">
+        <button class="btn btn-sec btn-sm" onclick="invSugerirUbicacionPara('invNombre','invUbicacion')" title="Que la IA sugiera dónde">✨</button>
+      </div>
+    </div>
     <div class="field"><label>Cantidad</label><input id="invCantidad" type="text"></div>
+    <div class="field"><label>Descripción / notas</label><textarea id="invNotas" rows="2" style="width:100%"></textarea></div>
+    <div class="field"><label>Código de barras</label><input id="invCodigo" type="text"></div>
+    <div class="field"><label>Foto</label>
+      <div id="invNuevaFotoPreview"></div>
+      <input type="file" accept="image/*" id="invNuevaFotoInput" style="display:none" onchange="invEditFotoSeleccionada(event)">
+      <button class="btn btn-sec btn-sm" onclick="document.getElementById('invNuevaFotoInput').click()">📷 Agregar foto</button>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="intentarCerrarModal('modalInventario')">Cancelar</button>
       <button class="btn" id="btnGuardarInventario" onclick="guardarInventario()">Guardar</button>
@@ -1164,12 +1176,14 @@ function sesRenderVeredicto(gastos) {
 // ============================================================================
 function itemsInventario() {
   const deGastos = (DATA.gastos || []).filter(g => g.tipoFila === 'producto' && g.grupo !== 'Ropa').map(g => ({
-    nombre: g.concepto, ubicacion: g.ubicacion || '', grupo: g.grupo || 'Alacena', cantidad: g.cantidad, foto: g.fotoProducto, origen: 'gastos', ref: g.rowIndex
+    nombre: g.concepto, ubicacion: g.ubicacion || '', grupo: g.grupo || 'Alacena', cantidad: g.cantidad, foto: g.fotoProducto,
+    notas: g.notas || '', codigo: g.codigo || '', origen: 'gastos', ref: g.rowIndex
   }));
   const deAppCompleta = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || [])
     .filter(i => !(i.Papelera === true || String(i.Papelera).toLowerCase() === 'true'))
     .map(i => ({
-      nombre: i.Nombre, ubicacion: i.Ubicacion || '', grupo: 'General', cantidad: i.Cantidad, foto: i.FotoURL, origen: 'appCompleta', ref: i.ID
+      nombre: i.Nombre, ubicacion: i.Ubicacion || '', grupo: 'General', cantidad: i.Cantidad, foto: i.FotoURL,
+      notas: i.Caracteristicas || '', codigo: i.Codigo || '', origen: 'appCompleta', ref: i.ID
     }));
   return deGastos.concat(deAppCompleta);
 }
@@ -1218,7 +1232,7 @@ function renderInvArbol() {
   const bc = document.getElementById('invBreadcrumb');
   const partes = invRutaActual ? invRutaActual.split('/') : [];
   bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + partes.map((p, i) => ` › <span onclick="irACarpetaInv(${i})">${escapeHtml(p)}</span>`).join('') +
-    (invRutaActual ? ` <button class="btn btn-sec btn-sm" onclick="invRenombrarCarpeta()">✏️</button><button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="invEliminarCarpeta()">🗑</button>` : '');
+    (invRutaActual ? ` <button class="btn btn-sec btn-sm" onclick="invRenombrarCarpeta()">✏️</button><button class="btn btn-sec btn-sm" onclick="invAbrirMoverCarpeta()" title="Mover a otra carpeta">📦</button><button class="btn btn-sec btn-sm" onclick="invEditarDescripcionCarpeta()" title="Describir qué va aquí (ayuda a la IA)">📝</button><button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="invEliminarCarpeta()">🗑</button>` : '');
   const cont = document.getElementById('invArbol');
   const nombresCarpetas = Object.keys(subcarpetas);
   if (!nombresCarpetas.length && !itemsAqui.length) { cont.innerHTML = '<div class="empty-state">Vacío — agrega un objeto</div>'; return; }
@@ -1230,17 +1244,29 @@ function irRaizInventario() { invRutaActual = ''; renderInvArbol(); }
 function irACarpetaInv(index) { invRutaActual = invRutaActual.split('/').slice(0, index + 1).join('/'); renderInvArbol(); }
 function entrarCarpetaInv(nombre) { invRutaActual = invRutaActual ? invRutaActual + '/' + nombre : nombre; renderInvArbol(); }
 
+let invFotoNueva = null; // {base64,mimeType} mientras se edita/crea un objeto, antes de subirla
 function verItemInventario(origen, ref) {
   const it = itemsInventario().find(x => x.origen === origen && String(x.ref) === String(ref));
   if (!it) return;
+  invFotoNueva = null;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'invEditarOverlay';
   overlay.innerHTML = `<div class="modal-sheet">
     <div class="modal-title">Editar objeto</div>
-    <div class="field"><label class="hint">Nombre</label><input type="text" id="invEditNombre" value="${escapeHtml(it.nombre || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div id="invEditFotoPreview" style="text-align:center;margin-bottom:8px">${it.foto ? `<img src="${it.foto}" style="max-height:120px;border-radius:10px">` : ''}</div>
+    <input type="file" accept="image/*" id="invEditFotoInput" style="display:none" onchange="invEditFotoSeleccionada(event)">
+    <button class="btn btn-sec btn-sm" onclick="document.getElementById('invEditFotoInput').click()">📷 ${it.foto ? 'Cambiar foto' : 'Agregar foto'}</button>
+    <div class="field" style="margin-top:10px"><label class="hint">Nombre</label><input type="text" id="invEditNombre" value="${escapeHtml(it.nombre || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
     <div class="field" style="margin-top:8px"><label class="hint">Cantidad</label><input type="text" id="invEditCantidad" value="${escapeHtml(String(it.cantidad || ''))}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
-    <div class="field" style="margin-top:8px"><label class="hint">Ubicación (ej: Alacena/Refrigerador)</label><input type="text" id="invEditUbicacion" value="${escapeHtml(it.ubicacion || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div class="field" style="margin-top:8px"><label class="hint">Ubicación (ej: Alacena/Refrigerador)</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="invEditUbicacion" value="${escapeHtml(it.ubicacion || '')}" style="flex:1;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+        <button class="btn btn-sec btn-sm" onclick="invSugerirUbicacionPara('invEditNombre','invEditUbicacion')" title="Que la IA sugiera dónde">✨</button>
+      </div>
+    </div>
+    <div class="field" style="margin-top:8px"><label class="hint">Descripción / notas</label><textarea id="invEditNotas" rows="2" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">${escapeHtml(it.notas || '')}</textarea></div>
+    <div class="field" style="margin-top:8px"><label class="hint">Código de barras</label><input type="text" id="invEditCodigo" value="${escapeHtml(it.codigo || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
     <div class="modal-actions">
       <button class="btn btn-sec" style="color:var(--red)" onclick="invEliminarItem('${origen}','${ref}')">🗑 Eliminar</button>
       <button class="btn btn-sec" id="invEditCancelar">Cancelar</button>
@@ -1252,20 +1278,60 @@ function verItemInventario(origen, ref) {
   overlay.querySelector('#invEditCancelar').onclick = () => overlay.remove();
   overlay.querySelector('#invEditGuardar').onclick = () => invGuardarEdicionItem(origen, ref);
 }
+async function invEditFotoSeleccionada(e) {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const resized = await rpResizeImageFile(f, 1000, 0.85);
+  invFotoNueva = { base64: resized.base64, mimeType: resized.mimeType };
+  const preview = document.getElementById('invEditFotoPreview') || document.getElementById('invNuevaFotoPreview');
+  if (preview) preview.innerHTML = `<img src="${resized.dataUrl}" style="max-height:120px;border-radius:10px">`;
+}
+// "✨ Sugerir ubicación" — reusa las descripciones de carpeta ya guardadas
+// (invGetFolderDescs) para que la IA adivine dónde va algo nuevo. Nunca
+// archiva solo: solo RELLENA el campo de ubicación, el usuario revisa y
+// guarda (o lo cambia) — pedido explícito del usuario.
+async function invSugerirUbicacionPara(nombreInputId, ubicacionInputId) {
+  const nombre = document.getElementById(nombreInputId).value.trim();
+  if (!nombre) { showToast('Escribe primero el nombre del objeto'); return; }
+  const descsRes = await apiCall('getInvFolderDescs', {});
+  const descs = (descsRes && descsRes.descs) || {};
+  const carpetas = invTodasLasCarpetas().filter(Boolean).map(path => ({ path, descripcion: descs[path] || '' }));
+  if (!carpetas.length) { showToast('Todavía no tienes carpetas para sugerir'); return; }
+  showToast('Pensando…');
+  const r = await apiCall('sugerirUbicacionInventario', { nombre, carpetas });
+  if (!r.ok) { showToast('No se pudo sugerir: ' + (r.error || 'sin conexión')); return; }
+  if (!r.sugerencia) { showToast('La IA no encontró una carpeta clara para "' + nombre + '"'); return; }
+  pedirConfirmacion('¿Guardarlo aquí?', '"' + nombre + '" → ' + r.sugerencia, () => {
+    document.getElementById(ubicacionInputId).value = r.sugerencia;
+    showToast('✓ Ubicación sugerida aplicada');
+  });
+}
 async function invGuardarEdicionItem(origen, ref) {
   const nombre = document.getElementById('invEditNombre').value.trim();
   const cantidad = document.getElementById('invEditCantidad').value.trim();
   const ubicacion = document.getElementById('invEditUbicacion').value.trim();
+  const notas = document.getElementById('invEditNotas').value.trim();
+  const codigo = document.getElementById('invEditCodigo').value.trim();
   let res;
   if (origen === 'gastos') {
-    res = await apiCall('updateGasto', { rowIndex: ref, concepto: nombre, cantidad, ubicacion });
+    let fotoUrl;
+    if (invFotoNueva) {
+      const subida = await apiCall('uploadImageAcuerdos', { imageBase64: invFotoNueva.base64, mimeType: invFotoNueva.mimeType, fileName: 'inventario-' + Date.now() + '.jpg' });
+      if (subida.ok) fotoUrl = subida.url;
+    }
+    res = await apiCall('updateGasto', Object.assign({ rowIndex: ref, concepto: nombre, cantidad, ubicacion, notas, codigo }, fotoUrl !== undefined ? { fotoProducto: fotoUrl } : {}));
   } else {
     const fila = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).find(i => i.ID === ref);
     if (!fila) return;
-    res = await apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Nombre: nombre, Cantidad: cantidad, Ubicacion: ubicacion }) });
+    let fotoUrl = fila.FotoURL;
+    if (invFotoNueva) {
+      const subida = await apiCall('uploadImageAppCompleta', { imageBase64: invFotoNueva.base64, mimeType: invFotoNueva.mimeType, fileName: 'inventario-' + Date.now() + '.jpg' });
+      if (subida.ok) fotoUrl = subida.url;
+    }
+    res = await apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Nombre: nombre, Cantidad: cantidad, Ubicacion: ubicacion, Caracteristicas: notas, Codigo: codigo, FotoURL: fotoUrl }) });
   }
   if (!res.ok) { alert('Error: ' + (res.error || 'sin conexión')); return; }
   const overlay = document.getElementById('invEditarOverlay'); if (overlay) overlay.remove();
+  invFotoNueva = null;
   showToast('✓ Objeto actualizado');
   cargarTodo();
 }
@@ -1333,6 +1399,53 @@ async function invEliminarCarpeta() {
   invRutaActual = pathActual.split('/').slice(0, -1).join('/');
   showToast('✓ Carpeta eliminada');
   cargarTodo();
+}
+// Todas las rutas de carpeta que ya existen de verdad (cada prefijo
+// completo visto en Ubicacion de cualquier objeto), más la raíz ('') —
+// sirve tanto para "Mover a..." como para armar el contexto de
+// sugerirUbicacionInventario.
+function invTodasLasCarpetas() {
+  const set = new Set(['']);
+  itemsInventario().forEach(it => {
+    const ubi = String(it.ubicacion || '').trim(); if (!ubi) return;
+    let acc = '';
+    ubi.split('/').forEach(p => { acc = acc ? acc + '/' + p : p; set.add(acc); });
+  });
+  return Array.from(set).sort();
+}
+// "📦 Mover a otra carpeta" — re-encarpeta TODO el subárbol de la carpeta
+// actual bajo una carpeta destino distinta (no se puede mover dentro de sí
+// misma ni de sus propias subcarpetas).
+function invAbrirMoverCarpeta() {
+  if (!invRutaActual) return;
+  const actual = invRutaActual;
+  const candidatos = invTodasLasCarpetas().filter(c => c !== actual && c.indexOf(actual + '/') !== 0);
+  finAbrirVincular('Mover "' + actual.split('/').pop() + '"', 'Elige la carpeta destino', candidatos,
+    c => ({ id: c, texto: c || '📦 Raíz de Inventario' }),
+    (destino) => invMoverCarpeta(actual, destino));
+}
+async function invMoverCarpeta(origen, destino) {
+  const nombre = origen.split('/').pop();
+  const nuevoPath = destino ? destino + '/' + nombre : nombre;
+  if (nuevoPath === origen) return;
+  const afectados = itemsInventario().filter(it => it.ubicacion === origen || it.ubicacion.indexOf(origen + '/') === 0);
+  for (const it of afectados) await invActualizarUbicacionItem(it, invRenombrarEnUbicacion(it.ubicacion, origen, nuevoPath));
+  invRutaActual = nuevoPath;
+  showToast('✓ Carpeta movida');
+  cargarTodo();
+}
+// "📝 Describir qué va aquí" — texto libre guardado globalmente por carpeta
+// (Notas_Ocultas!H1), que luego usa sugerirUbicacionInventario como
+// contexto para adivinar dónde archivar algo nuevo.
+async function invEditarDescripcionCarpeta() {
+  if (!invRutaActual) return;
+  const descsRes = await apiCall('getInvFolderDescs', {});
+  const actual = (descsRes && descsRes.descs && descsRes.descs[invRutaActual]) || '';
+  const nueva = prompt('¿Qué tipo de cosas van en "' + invRutaActual.split('/').pop() + '"? (ej: "papelería, herramientas chicas")', actual);
+  if (nueva === null) return;
+  const res = await apiCall('saveInvFolderDesc', { path: invRutaActual, descripcion: nueva.trim() });
+  if (!res.ok) { alert('Error: ' + res.error); return; }
+  showToast('✓ Descripción guardada');
 }
 
 // ---- escáner de código de barras (BarcodeDetector nativo) ----
@@ -1407,20 +1520,30 @@ function abrirModalInventario() {
   document.getElementById('invNombre').value = '';
   document.getElementById('invCantidad').value = '';
   document.getElementById('invUbicacion').value = invRutaActual;
+  document.getElementById('invNotas').value = '';
+  document.getElementById('invCodigo').value = '';
+  document.getElementById('invNuevaFotoPreview').innerHTML = '';
+  invFotoNueva = null;
   elegirGrupoInv(invGrupoFiltro || 'Alacena');
   abrirModal('modalInventario');
 }
-function guardarInventario() {
+async function guardarInventario() {
   const nombre = document.getElementById('invNombre').value.trim();
   if (!nombre) return;
   const ubicacion = document.getElementById('invUbicacion').value;
   const cantidad = document.getElementById('invCantidad').value;
-  conEstadoGuardando('btnGuardarInventario', () => {
+  const notas = document.getElementById('invNotas').value.trim();
+  const codigo = document.getElementById('invCodigo').value.trim();
+  await conEstadoGuardando('btnGuardarInventario', async () => {
     if (invGrupoNuevo === 'General') {
-      return apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: { Nombre: nombre, Categoria: 'General', Ubicacion: ubicacion, Cantidad: cantidad, Usuario: usuarioActual.Nombre } });
+      let fotoUrl = '';
+      if (invFotoNueva) { const s = await apiCall('uploadImageAppCompleta', { imageBase64: invFotoNueva.base64, mimeType: invFotoNueva.mimeType, fileName: 'inventario-' + Date.now() + '.jpg' }); if (s.ok) fotoUrl = s.url; }
+      return apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: { Nombre: nombre, Categoria: 'General', Ubicacion: ubicacion, Cantidad: cantidad, Caracteristicas: notas, Codigo: codigo, FotoURL: fotoUrl, Usuario: usuarioActual.Nombre } });
     }
-    return apiCall('syncProductoExterno', { externoId: 'man-' + Date.now(), externoOrigen: 'Centro', grupo: 'Alacena', concepto: nombre, ubicacion: ubicacion, cantidad: cantidad, sesion: usuarioActual.Nombre });
-  }).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); cargarTodo(); } });
+    let fotoUrl = '';
+    if (invFotoNueva) { const s = await apiCall('uploadImageAcuerdos', { imageBase64: invFotoNueva.base64, mimeType: invFotoNueva.mimeType, fileName: 'inventario-' + Date.now() + '.jpg' }); if (s.ok) fotoUrl = s.url; }
+    return apiCall('syncProductoExterno', { externoId: 'man-' + Date.now(), externoOrigen: 'Centro', grupo: 'Alacena', concepto: nombre, ubicacion: ubicacion, cantidad: cantidad, notas, codigo, fotoUrl, sesion: usuarioActual.Nombre });
+  }).then(res => { if (res && res.ok) { cerrarModal('modalInventario'); invFotoNueva = null; cargarTodo(); } });
 }
 
 // ============================================================================
