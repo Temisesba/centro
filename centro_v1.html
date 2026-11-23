@@ -257,6 +257,7 @@ a{color:var(--accent)}
 
   <!-- ---- LISTA DE COMPRAS ---- -->
   <div class="view" id="view-lista">
+    <div class="card" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="lisSelectorArea"></div>
     <div class="card">
       <div style="display:flex;gap:6px">
         <input id="lisNuevoItem" type="text" placeholder="Agregar a la lista..." style="flex:1;padding:11px 12px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--card2);color:var(--ink)" onkeydown="if(event.key==='Enter')lisAgregar()">
@@ -1170,7 +1171,8 @@ function renderInvArbol() {
   });
   const bc = document.getElementById('invBreadcrumb');
   const partes = invRutaActual ? invRutaActual.split('/') : [];
-  bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + partes.map((p, i) => ` › <span onclick="irACarpetaInv(${i})">${escapeHtml(p)}</span>`).join('');
+  bc.innerHTML = '<span onclick="irRaizInventario()">Inventario</span>' + partes.map((p, i) => ` › <span onclick="irACarpetaInv(${i})">${escapeHtml(p)}</span>`).join('') +
+    (invRutaActual ? ` <button class="btn btn-sec btn-sm" onclick="invRenombrarCarpeta()">✏️</button><button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="invEliminarCarpeta()">🗑</button>` : '');
   const cont = document.getElementById('invArbol');
   const nombresCarpetas = Object.keys(subcarpetas);
   if (!nombresCarpetas.length && !itemsAqui.length) { cont.innerHTML = '<div class="empty-state">Vacío — agrega un objeto</div>'; return; }
@@ -1183,7 +1185,47 @@ function irACarpetaInv(index) { invRutaActual = invRutaActual.split('/').slice(0
 function entrarCarpetaInv(nombre) { invRutaActual = invRutaActual ? invRutaActual + '/' + nombre : nombre; renderInvArbol(); }
 
 function verItemInventario(origen, ref) {
+  const it = itemsInventario().find(x => x.origen === origen && String(x.ref) === String(ref));
+  if (!it) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'invEditarOverlay';
+  overlay.innerHTML = `<div class="modal-sheet">
+    <div class="modal-title">Editar objeto</div>
+    <div class="field"><label class="hint">Nombre</label><input type="text" id="invEditNombre" value="${escapeHtml(it.nombre || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div class="field" style="margin-top:8px"><label class="hint">Cantidad</label><input type="text" id="invEditCantidad" value="${escapeHtml(String(it.cantidad || ''))}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div class="field" style="margin-top:8px"><label class="hint">Ubicación (ej: Alacena/Refrigerador)</label><input type="text" id="invEditUbicacion" value="${escapeHtml(it.ubicacion || '')}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sec" style="color:var(--red)" onclick="invEliminarItem('${origen}','${ref}')">🗑 Eliminar</button>
+      <button class="btn btn-sec" id="invEditCancelar">Cancelar</button>
+      <button class="btn" id="invEditGuardar">💾 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#invEditCancelar').onclick = () => overlay.remove();
+  overlay.querySelector('#invEditGuardar').onclick = () => invGuardarEdicionItem(origen, ref);
+}
+async function invGuardarEdicionItem(origen, ref) {
+  const nombre = document.getElementById('invEditNombre').value.trim();
+  const cantidad = document.getElementById('invEditCantidad').value.trim();
+  const ubicacion = document.getElementById('invEditUbicacion').value.trim();
+  let res;
+  if (origen === 'gastos') {
+    res = await apiCall('updateGasto', { rowIndex: ref, concepto: nombre, cantidad, ubicacion });
+  } else {
+    const fila = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).find(i => i.ID === ref);
+    if (!fila) return;
+    res = await apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Nombre: nombre, Cantidad: cantidad, Ubicacion: ubicacion }) });
+  }
+  if (!res.ok) { alert('Error: ' + (res.error || 'sin conexión')); return; }
+  const overlay = document.getElementById('invEditarOverlay'); if (overlay) overlay.remove();
+  showToast('✓ Objeto actualizado');
+  cargarTodo();
+}
+function invEliminarItem(origen, ref) {
   pedirConfirmacion('Eliminar', '¿Eliminar este objeto del inventario (se va a la papelera)?', () => {
+    const overlay = document.getElementById('invEditarOverlay'); if (overlay) overlay.remove();
     if (origen === 'gastos') {
       apiCall('deleteGasto', { rowIndex: ref, eliminadoPor: usuarioActual.Nombre }).then(cargarTodo);
     } else {
@@ -1195,6 +1237,56 @@ function verItemInventario(origen, ref) {
       apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Papelera: true }) }).then(cargarTodo);
     }
   });
+}
+// ---- Inventario: renombrar/eliminar una carpeta (ubicación) completa ----
+// La "carpeta" no es una fila propia: es solo el prefijo compartido del campo
+// Ubicacion de varios objetos. Renombrar/eliminar reescribe ese prefijo en
+// cada objeto afectado (nunca se pierde el objeto, solo cambia su ubicación).
+async function invActualizarUbicacionItem(it, nuevaUbicacion) {
+  if (it.origen === 'gastos') return apiCall('updateGasto', { rowIndex: it.ref, ubicacion: nuevaUbicacion });
+  const fila = ((DATA.appCompleta && DATA.appCompleta.inventario_general) || []).find(i => i.ID === it.ref);
+  if (!fila) return { ok: false };
+  return apiCall('saveRowAppCompleta', { table: 'INVENTARIO_GENERAL', row: Object.assign({}, fila, { Ubicacion: nuevaUbicacion }) });
+}
+function invRenombrarEnUbicacion(ubicacion, pathViejo, pathNuevo) {
+  if (ubicacion === pathViejo) return pathNuevo;
+  const prefix = pathViejo + '/';
+  if (ubicacion.indexOf(prefix) === 0) return pathNuevo + '/' + ubicacion.slice(prefix.length);
+  return ubicacion;
+}
+function invQuitarSegmento(ubicacion, path) {
+  const parent = path.split('/').slice(0, -1).join('/');
+  if (ubicacion === path) return parent;
+  const prefix = path + '/';
+  if (ubicacion.indexOf(prefix) === 0) {
+    const resto = ubicacion.slice(prefix.length);
+    return parent ? parent + '/' + resto : resto;
+  }
+  return ubicacion;
+}
+async function invRenombrarCarpeta() {
+  if (!invRutaActual) return;
+  const actual = invRutaActual.split('/').pop();
+  const nuevo = prompt('Nuevo nombre para "' + actual + '":', actual);
+  if (!nuevo || !nuevo.trim() || nuevo.trim() === actual) return;
+  const partes = invRutaActual.split('/'); partes[partes.length - 1] = nuevo.trim();
+  const pathNuevo = partes.join('/');
+  const afectados = itemsInventario().filter(it => it.ubicacion === invRutaActual || it.ubicacion.indexOf(invRutaActual + '/') === 0);
+  for (const it of afectados) await invActualizarUbicacionItem(it, invRenombrarEnUbicacion(it.ubicacion, invRutaActual, pathNuevo));
+  invRutaActual = pathNuevo;
+  showToast('✓ Carpeta renombrada');
+  cargarTodo();
+}
+async function invEliminarCarpeta() {
+  if (!invRutaActual) return;
+  const nombre = invRutaActual.split('/').pop();
+  if (!confirm('¿Eliminar la carpeta "' + nombre + '"? Sus objetos se moverán un nivel arriba (no se borran).')) return;
+  const pathActual = invRutaActual;
+  const afectados = itemsInventario().filter(it => it.ubicacion === pathActual || it.ubicacion.indexOf(pathActual + '/') === 0);
+  for (const it of afectados) await invActualizarUbicacionItem(it, invQuitarSegmento(it.ubicacion, pathActual));
+  invRutaActual = pathActual.split('/').slice(0, -1).join('/');
+  showToast('✓ Carpeta eliminada');
+  cargarTodo();
 }
 function elegirGrupoInv(g) {
   invGrupoNuevo = g;
@@ -4126,15 +4218,82 @@ function notaEliminar(id) {
 }
 
 // ============================================================================
-// LISTA DE COMPRAS — transplante real de getShopping/saveShopping (ya en
-// Gastos.js), limitado a UNA lista por sesión (sin el catálogo de varias
-// listas con nombre ni "grupos" de sesiones compartiendo lista — eso es la
-// siguiente pieza). Vive sobre la misma sesión activa de Gastos (sesActiva).
+// LISTA DE COMPRAS — transplante real de getShopping/saveShopping/
+// getContenedores/saveContenedores (ya en Gastos.js) con varias listas con
+// nombre por sesión (ej. "Súper", "Farmacia"), igual que v34ContenedorActual
+// en el original. Vive sobre la misma sesión activa de Gastos (sesActiva).
 // ============================================================================
 let lisItems = [];
-function lisAbrir() { irAVista('lista'); lisCargar(); }
+let lisContenedores = [{ id: '', nombre: 'Lista principal', def: true }];
+function lisSesionClave() { return sesActiva || 'Principal'; }
+function lisActualId() { return localStorage.getItem('centro_lis_actual_' + lisSesionClave()) || ''; }
+function lisSetActualId(id) { localStorage.setItem('centro_lis_actual_' + lisSesionClave(), id); }
+function lisContenedorActual() {
+  const id = lisActualId();
+  return lisContenedores.find(c => c.id === id) || lisContenedores.find(c => c.def) || lisContenedores[0] || { id: '', nombre: '—', def: true };
+}
+function lisAbrir() { irAVista('lista'); lisCargarContenedores(); }
+async function lisCargarContenedores() {
+  const r = await apiCall('getContenedores', { tipo: 'lista', sesion: lisSesionClave() });
+  lisContenedores = (r && r.ok && Array.isArray(r.contenedores) && r.contenedores.length) ? r.contenedores : [{ id: '', nombre: 'Lista principal', def: true }];
+  lisRenderSelector();
+  lisCargar();
+}
+function lisRenderSelector() {
+  const el = document.getElementById('lisSelectorArea'); if (!el) return;
+  const cur = lisContenedorActual();
+  el.innerHTML = `<select onchange="lisCambiarContenedor(this.value)" style="flex:1;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink);font-weight:600">
+      ${lisContenedores.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur.id ? 'selected' : ''}>${escapeHtml(c.nombre)}${c.def ? ' ⭐' : ''}</option>`).join('')}
+    </select>
+    <button class="btn btn-sec btn-sm" onclick="lisNuevaLista()">＋ Nueva</button>
+    <button class="btn btn-sec btn-sm" onclick="lisRenombrarLista()">✏️</button>
+    ${cur.def ? '' : '<button class="btn btn-sec btn-sm" onclick="lisSetDefault()">⭐</button><button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="lisEliminarLista()">🗑</button>'}`;
+}
+function lisCambiarContenedor(id) { lisSetActualId(id); lisRenderSelector(); lisCargar(); }
+async function lisGuardarContenedores() { await apiCall('saveContenedores', { tipo: 'lista', sesion: lisSesionClave(), contenedores: lisContenedores }); }
+async function lisNuevaLista() {
+  const nombre = prompt('Nombre de la nueva lista (ej. Súper, Farmacia):'); if (!nombre || !nombre.trim()) return;
+  const nuevo = { id: crypto.randomUUID(), nombre: nombre.trim(), def: false };
+  lisContenedores.push(nuevo);
+  await lisGuardarContenedores();
+  lisSetActualId(nuevo.id);
+  lisRenderSelector();
+  lisCargar();
+  showToast('✓ Lista creada');
+}
+async function lisRenombrarLista() {
+  const cur = lisContenedorActual();
+  const nombre = prompt('Nuevo nombre:', cur.nombre); if (!nombre || !nombre.trim() || nombre.trim() === cur.nombre) return;
+  cur.nombre = nombre.trim();
+  await lisGuardarContenedores();
+  lisRenderSelector();
+  showToast('✓ Lista renombrada');
+}
+async function lisSetDefault() {
+  const cur = lisContenedorActual();
+  lisContenedores.forEach(c => { c.def = (c.id === cur.id); });
+  await lisGuardarContenedores();
+  lisRenderSelector();
+  showToast('✓ Ahora es la predeterminada');
+}
+function lisEliminarLista() {
+  const cur = lisContenedorActual();
+  if (cur.def) { showToast('No puedes eliminar la predeterminada'); return; }
+  pedirConfirmacion('Eliminar lista', '¿Eliminar "' + cur.nombre + '"? Sus pendientes se moverán a la predeterminada.', async () => {
+    const defId = (lisContenedores.find(c => c.def) || {}).id || '';
+    const propios = lisItems.map(it => Object.assign({}, it, { listaId: defId }));
+    if (propios.length) await apiCall('saveShopping', { sesion: lisSesionClave(), listaId: cur.id, esDefault: false, items: propios });
+    lisContenedores = lisContenedores.filter(c => c.id !== cur.id);
+    await lisGuardarContenedores();
+    lisSetActualId(defId);
+    lisRenderSelector();
+    lisCargar();
+    showToast('✓ Lista eliminada');
+  });
+}
 async function lisCargar() {
-  const r = await apiCall('getShopping', { sesion: sesActiva || '', listaId: '', esDefault: true });
+  const cur = lisContenedorActual();
+  const r = await apiCall('getShopping', { sesion: lisSesionClave(), listaId: cur.id, esDefault: !!cur.def });
   lisItems = (r && r.items) || [];
   lisRender();
 }
@@ -4157,7 +4316,8 @@ function lisRender() {
 function lisAgregar() {
   const txt = document.getElementById('lisNuevoItem').value.trim();
   if (!txt) return;
-  lisItems.push({ done: false, item: txt, depto: '', quien: '', tienda: '', sesion: sesActiva || '', alcance: 'solo', listaId: '' });
+  const cur = lisContenedorActual();
+  lisItems.push({ done: false, item: txt, depto: '', quien: '', tienda: '', sesion: sesActiva || '', alcance: 'solo', listaId: cur.id });
   document.getElementById('lisNuevoItem').value = '';
   lisRender();
   lisGuardar();
@@ -4174,7 +4334,10 @@ function lisEditar(idx) {
 function lisEliminar(idx) {
   pedirConfirmacion('Eliminar', '¿Quitar "' + lisItems[idx].item + '" de la lista?', () => { lisItems.splice(idx, 1); lisRender(); lisGuardar(); });
 }
-function lisGuardar() { apiCall('saveShopping', { sesion: sesActiva || '', listaId: '', esDefault: true, items: lisItems }); }
+function lisGuardar() {
+  const cur = lisContenedorActual();
+  apiCall('saveShopping', { sesion: lisSesionClave(), listaId: cur.id, esDefault: !!cur.def, items: lisItems });
+}
 
 // ============================================================================
 // ESTADÍSTICAS — versión compacta de renderStats() del original: total
