@@ -309,6 +309,7 @@ a{color:var(--accent)}
       <span class="pill" data-sec="ideas" onclick="rpSetSection('ideas')">✨ Ideas</span>
       <span class="pill" data-sec="outfits" onclick="rpSetSection('outfits')">💾 Outfits</span>
       <span class="pill" data-sec="perfil" onclick="rpSetSection('perfil')">👤 Perfil</span>
+      <span class="pill" data-sec="calendario" onclick="rpSetSection('calendario')">📅 Calendario</span>
     </div>
     <div id="rpContent"><div class="loading">Cargando…</div></div>
     <button class="fab" id="rpFab" onclick="abrirModalPrenda()">+</button>
@@ -1709,6 +1710,7 @@ function rpRender() {
   else if (rpSection === 'ideas') rpRenderIdeas();
   else if (rpSection === 'outfits') rpRenderOutfits();
   else if (rpSection === 'perfil') rpRenderPerfil();
+  else if (rpSection === 'calendario') rpRenderCalendario();
   else rpRenderVestidor();
 }
 function rpRenderCatalogo() {
@@ -1752,26 +1754,77 @@ async function rpFotoSeleccionada(e) {
   if (!r.ok) { area.innerHTML = `<p class="hint">No se pudo analizar esta foto (${escapeHtml(r.error || 'sin conexión')}).</p><button class="btn secondary" onclick="abrirModalPrenda()">Reintentar</button>`; return; }
   rpDetections = Object.assign({}, resized, { items: (r.items || []).map(it => Object.assign({}, it)), origenUrl: subOrigen.ok ? subOrigen.url : '' });
   rpDetections.items.forEach(it => { it.cropPreview = it.caja ? rpCropDataUrl(rpDetections.canvas, rpDetections.width, rpDetections.height, it.caja) : rpDetections.dataUrl; });
+  rpDetections.items.forEach(it => {
+    const sugerido = rpMejorCandidato(it, rpCandidatosParaPrenda(it.categoria));
+    it.matchSugerido = sugerido ? sugerido.ID : null;
+  });
   rpRenderRevision();
 }
+// "¿Ya tienes esta?" — mismo criterio que ropa.html (color pesa más que
+// tipo; se exige al menos coincidencia de color para sugerir algo). La
+// sugerencia nunca se acepta sola: hace falta que el usuario confirme
+// "Sí, ya la tengo" (matchId) para que esa detección se registre como uso
+// de la prenda existente en vez de crear una nueva.
+function rpCandidatosParaPrenda(categoria) { return rpPrendasActivas().filter(p => p.Categoria === categoria); }
+function rpMejorCandidato(it, candidatos, minPuntaje) {
+  if (minPuntaje === undefined) minPuntaje = 2;
+  let mejor = null, mejorPuntaje = 0;
+  candidatos.forEach(p => {
+    const colorIt = rpNormalizarTexto(it.color), colorP = rpNormalizarTexto(p.Color);
+    const tipoIt = rpNormalizarTexto(it.tipo), tipoP = rpNormalizarTexto(p.Tipo);
+    let puntaje = 0;
+    if (colorIt && colorP && (colorP.includes(colorIt) || colorIt.includes(colorP))) puntaje += 2;
+    if (tipoIt && tipoP && (tipoP.includes(tipoIt) || tipoIt.includes(tipoP))) puntaje += 1;
+    if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejor = p; }
+  });
+  return mejorPuntaje >= minPuntaje ? mejor : null;
+}
+function rpConfirmarMatch(i, id) { rpDetections.items[i].matchId = id; rpRenderRevision(); }
+function rpDeshacerMatch(i) { rpDetections.items[i].matchId = undefined; rpRenderRevision(); }
 function rpRenderRevision() {
   const d = rpDetections;
   const area = document.getElementById('rpCaptureArea');
   if (!d.items.length) { area.innerHTML = '<p class="hint">No se detectaron prendas claras en esta foto.</p><button class="btn secondary" onclick="abrirModalPrenda()">Intentar con otra foto</button>'; return; }
   area.innerHTML = `<p class="hint" style="margin-bottom:8px">Revisa y corrige antes de guardar:</p>` +
-    d.items.map((it, i) => `
-      <div class="rp-detect-card" style="display:flex;gap:10px">
-        <img src="${it.cropPreview || d.dataUrl}">
-        <div style="flex:1;display:flex;flex-direction:column;gap:5px">
-          <select onchange="rpDetections.items[${i}].categoria=this.value">${CATEGORIAS_ROPA.map(c => `<option ${c === it.categoria ? 'selected' : ''}>${c}</option>`).join('')}</select>
-          <input value="${escapeHtml(it.tipo || '')}" placeholder="Tipo" oninput="rpDetections.items[${i}].tipo=this.value" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
-          <div style="display:flex;gap:5px">
-            <input value="${escapeHtml(it.color || '')}" placeholder="Color" oninput="rpDetections.items[${i}].color=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
-            <input value="${escapeHtml(it.colorSecundario || '')}" placeholder="Color 2" oninput="rpDetections.items[${i}].colorSecundario=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+    d.items.map((it, i) => {
+      const confirmado = it.matchId !== undefined;
+      const prendaConfirmada = confirmado && it.matchId ? rpFindPrenda(it.matchId) : null;
+      const prendaSugerida = (!confirmado && it.matchSugerido) ? rpFindPrenda(it.matchSugerido) : null;
+      let matchHtml = '';
+      if (prendaConfirmada) {
+        matchHtml = `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding:6px;background:var(--card2);border-radius:8px">
+          ${rpFotoHtml(prendaConfirmada, { estilo: 'height:40px;flex:none;border-radius:6px', clickable: false })}
+          <div style="flex:1;font-size:12.5px">✅ Ya la tienes: <b>${escapeHtml(prendaConfirmada.Tipo || prendaConfirmada.Categoria)}</b></div>
+          <a href="javascript:void(0)" onclick="rpDeshacerMatch(${i})" style="font-size:11px">deshacer</a>
+        </div>`;
+      } else if (prendaSugerida) {
+        matchHtml = `<div style="margin-top:6px;padding:6px;background:var(--card2);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            ${rpFotoHtml(prendaSugerida, { estilo: 'height:40px;flex:none;border-radius:6px', clickable: false })}
+            <div style="flex:1;font-size:12.5px">🔁 ¿Ya tienes esta? <b>${escapeHtml(prendaSugerida.Tipo || prendaSugerida.Categoria)}</b></div>
           </div>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn btn-sec btn-sm" style="flex:1" onclick="rpConfirmarMatch(${i}, '${prendaSugerida.ID}')">Sí, ya la tengo</button>
+            <button class="btn btn-sec btn-sm" style="flex:1" onclick="rpConfirmarMatch(${i}, null)">No, es nueva</button>
+          </div>
+        </div>`;
+      }
+      return `<div class="rp-detect-card" style="display:flex;gap:10px;flex-direction:column">
+        <div style="display:flex;gap:10px">
+          <img src="${it.cropPreview || d.dataUrl}">
+          <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+            <select onchange="rpDetections.items[${i}].categoria=this.value">${CATEGORIAS_ROPA.map(c => `<option ${c === it.categoria ? 'selected' : ''}>${c}</option>`).join('')}</select>
+            <input value="${escapeHtml(it.tipo || '')}" placeholder="Tipo" oninput="rpDetections.items[${i}].tipo=this.value" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+            <div style="display:flex;gap:5px">
+              <input value="${escapeHtml(it.color || '')}" placeholder="Color" oninput="rpDetections.items[${i}].color=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+              <input value="${escapeHtml(it.colorSecundario || '')}" placeholder="Color 2" oninput="rpDetections.items[${i}].colorSecundario=this.value" style="flex:1;padding:6px 8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+            </div>
+          </div>
+          <button class="btn btn-sec btn-sm" onclick="rpQuitarDeteccion(${i})" title="No incluir">✕</button>
         </div>
-        <button class="btn btn-sec btn-sm" onclick="rpQuitarDeteccion(${i})" title="No incluir">✕</button>
-      </div>`).join('') +
+        ${matchHtml}
+      </div>`;
+    }).join('') +
     `<div class="modal-actions"><button class="btn" id="rpBtnGuardarDetecciones" onclick="rpGuardarDetecciones()">Guardar prenda${d.items.length > 1 ? 's' : ''}</button></div>`;
 }
 function rpQuitarDeteccion(i) { rpDetections.items.splice(i, 1); rpRenderRevision(); }
@@ -1780,9 +1833,20 @@ async function rpGuardarDetecciones() {
   const btn = document.getElementById('rpBtnGuardarDetecciones');
   const area = document.getElementById('rpCaptureArea');
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-  const items = d.items; let guardadas = 0;
+  const items = d.items; let guardadas = 0, usadasExistentes = 0;
   for (const it of items) {
-    area.querySelector('.hint') && (area.querySelector('.hint').textContent = `Generando capa ${guardadas + 1}/${items.length}…`);
+    area.querySelector('.hint') && (area.querySelector('.hint').textContent = `Procesando ${guardadas + usadasExistentes + 1}/${items.length}…`);
+    if (it.matchId) {
+      // Confirmado "ya la tengo" — no crea una prenda duplicada, solo
+      // registra el uso de la que ya existe en el catálogo.
+      const res = await apiCall('registrarUso', { prendaIds: [it.matchId], fecha: hoyISO() });
+      if (res.ok) {
+        const p = rpFindPrenda(it.matchId);
+        if (p) { p.UltimoUso = hoyISO(); p.VecesUsado = (Number(p.VecesUsado) || 0) + 1; }
+        usadasExistentes++;
+      }
+      continue;
+    }
     const row = await rpCrearFilaPrenda(it, d.origenUrl);
     const r = await apiCall('saveRowRopa', { table: 'PRENDAS', row });
     if (r.ok) {
@@ -1792,7 +1856,10 @@ async function rpGuardarDetecciones() {
     }
   }
   rpDetections = null;
-  showToast(guardadas ? `✓ ${guardadas} prenda${guardadas > 1 ? 's' : ''} guardada${guardadas > 1 ? 's' : ''}` : 'No se pudo guardar ninguna prenda');
+  const partes = [];
+  if (guardadas) partes.push(`${guardadas} prenda${guardadas > 1 ? 's' : ''} nueva${guardadas > 1 ? 's' : ''} guardada${guardadas > 1 ? 's' : ''}`);
+  if (usadasExistentes) partes.push(`${usadasExistentes} ya la${usadasExistentes > 1 ? 's' : ''} tenías, registrada${usadasExistentes > 1 ? 's' : ''} como usada${usadasExistentes > 1 ? 's' : ''} hoy`);
+  showToast(partes.length ? '✓ ' + partes.join(' · ') : 'No se pudo guardar ninguna prenda');
   cerrarModal('modalPrenda');
   cargarTodo();
 }
@@ -1871,7 +1938,11 @@ function rpRenderVestidor() {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <button class="btn" onclick="rpUsarOutfitHoy()">Usar este outfit hoy</button>
       <button class="btn btn-sec" onclick="rpGuardarOutfit()">💾 Guardar outfit</button>
-    </div>`;
+      <button class="btn btn-sec" id="rpBtnFeedback" onclick="rpPedirFeedbackOutfit(rpOutfitBoard.capas, 'rpFeedbackArea', 'rpBtnFeedback')">💬 Feedback</button>
+      <button class="btn btn-sec" id="rpBtnMejorar" onclick="rpMejorarOutfitConIA(rpOutfitBoard.capas, 'rpMejoradoArea', 'rpBtnMejorar')">✨ Mejorar con IA</button>
+    </div>
+    <div id="rpFeedbackArea"></div>
+    <div id="rpMejoradoArea"></div>`;
   rpRenderPreview();
   rpRenderCapasLista();
 }
@@ -1972,6 +2043,58 @@ function rpGuardarOutfit() {
     showToast('✓ Outfit guardado');
   });
 }
+async function rpPedirFeedbackOutfit(ids, areaId, btnId) {
+  const prendasObjs = ids.map(id => rpFindPrenda(id)).filter(Boolean);
+  if (!prendasObjs.length) { showToast('Elige al menos una prenda'); return; }
+  const prendas = prendasObjs.map(p => ({ categoria: p.Categoria, tipo: p.Tipo, color: p.Color, colorSecundario: p.ColorSecundario }));
+  const btn = document.getElementById(btnId);
+  const area = document.getElementById(areaId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Pensando…'; }
+  const r = await apiCall('feedbackOutfit', { prendas, evento: '' });
+  if (btn) { btn.disabled = false; btn.textContent = '💬 Feedback'; }
+  if (!area) return;
+  if (!r.ok) { area.innerHTML = `<p class="hint">No se pudo pedir feedback: ${escapeHtml(r.error || 'sin conexión')}</p>`; return; }
+  area.innerHTML = `<p class="hint" style="margin-top:8px">${escapeHtml(r.texto)}</p>`;
+}
+// "✨ Mejorar con IA" — único punto (junto con Ideas) donde se genera un
+// render realista real (generarOutfitEnManiqui, ya en el backend) en vez de
+// la composición por capas de siempre. Reusable desde el Vestidor y desde
+// cada tarjeta de Ideas, cada caller con sus propios IDs y su propio área.
+async function rpMejorarOutfitConIA(ids, areaId, btnId) {
+  const area = document.getElementById(areaId);
+  const btn = btnId ? document.getElementById(btnId) : null;
+  const items = ids.map(id => rpFindPrenda(id)).filter(Boolean);
+  if (!items.length) { showToast('Elige al menos una prenda'); return; }
+  const feedback = area ? (prompt('¿Algo que ajustar? (opcional) — ej: "fájate la camisa", "agrega un cinturón"') || '') : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparando maniquí…'; }
+  if (area) area.innerHTML = '<p class="hint">Generando…</p>';
+  const maniqui = await rpObtenerManiquiBase(rpGenero());
+  if (!maniqui || !maniqui.base64) {
+    if (area) area.innerHTML = '<p class="hint">No se pudo preparar el maniquí.</p>';
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Mejorar con IA'; }
+    return;
+  }
+  if (btn) btn.textContent = 'Cargando prendas…';
+  const prendas = [];
+  for (const p of items) {
+    if (!p.FotoURL) continue;
+    const fileId = rpFileIdDeUrlDrive(p.FotoURL);
+    if (!fileId) continue;
+    const info = await apiCall('descargarImagenDrive', { fileId });
+    if (info.ok) prendas.push({ base64: info.base64, mimeType: info.mimeType, categoria: p.Categoria });
+  }
+  if (!prendas.length) {
+    if (area) area.innerHTML = '<p class="hint">No se pudieron cargar las fotos.</p>';
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Mejorar con IA'; }
+    return;
+  }
+  if (btn) btn.textContent = 'Vistiendo al maniquí…';
+  const r = await apiCall('generarOutfitEnManiqui', { maniquiBase64: maniqui.base64, maniquiMimeType: maniqui.mimeType, prendas, feedback });
+  if (btn) { btn.disabled = false; btn.textContent = '✨ Mejorar con IA'; }
+  if (!r.ok) { if (area) area.innerHTML = `<p class="hint">No se pudo generar: ${escapeHtml(r.error || 'sin conexión')}</p>`; return; }
+  const subGen = await apiCall('uploadImageRopa', { imageBase64: r.imageBase64, mimeType: r.mimeType || 'image/jpeg', fileName: 'mejorado-' + Date.now() + '.jpg' });
+  if (area) area.innerHTML = subGen.ok ? `<img src="${subGen.url}" onclick="abrirLightbox('${subGen.url}')" style="max-width:100%;border-radius:12px;margin-top:10px;cursor:zoom-in">` : '<p class="hint">No se pudo guardar la imagen generada.</p>';
+}
 
 // ---- Vestidor: Ideas (sugerirOutfit — IA propone combos desde cero) ----
 const RP_WEATHER_CODES = { 0: 'despejado', 1: 'poco nublado', 2: 'parcialmente nublado', 3: 'nublado', 45: 'niebla', 48: 'niebla',
@@ -2039,7 +2162,9 @@ async function rpPedirIdeas() {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="btn btn-sec btn-sm" onclick='rpUsarIdeaHoy(${JSON.stringify(o.prendaIds)}, ${JSON.stringify(evento)})'>Usar hoy</button>
         <button class="btn btn-sec btn-sm" onclick='rpGuardarIdea(${JSON.stringify(o.prendaIds)}, ${JSON.stringify(o.motivo || '')}, ${JSON.stringify(evento)})'>💾 Guardar</button>
+        <button class="btn btn-sec btn-sm" id="rpBtnMejorarIdea${i}" onclick='rpMejorarOutfitConIA(${JSON.stringify(o.prendaIds)}, "rpMejoradoIdea${i}", "rpBtnMejorarIdea${i}")'>✨ Mejorar con IA</button>
       </div>
+      <div id="rpMejoradoIdea${i}"></div>
     </div>`;
   }).join('');
 }
@@ -2193,6 +2318,195 @@ async function rpGuardarPerfilDatos() {
   if (!res.ok) { alert('Error: ' + res.error); return; }
   DATA.ropa.perfil = [res.row];
   showToast('✓ Perfil guardado');
+}
+
+// ---- Vestidor: Calendario (historial de usos + próximos planeados) ----
+let rpCalFiltro = 'todo';
+function rpRenderCalendario() {
+  const el = document.getElementById('rpContent');
+  el.innerHTML = `
+    <div class="card">
+      <button class="btn btn-sec btn-sm" onclick="rpAbrirPlanificarDia()">➕ Planificar un día</button>
+      <div id="rpProximosPlaneados" style="margin-top:10px"></div>
+    </div>
+    <h3 style="margin:16px 0 8px;font-size:15px">Historial</h3>
+    <div class="pill-group" id="rpCalFiltroPills" style="margin-bottom:10px">
+      ${[['semana', 'Esta semana'], ['mes', 'Este mes'], ['anio', 'Este año'], ['todo', 'Todo']].map(([v, l]) => `<span class="pill ${rpCalFiltro === v ? 'on' : ''}" onclick="rpCalendarioFiltrar('${v}')">${l}</span>`).join('')}
+    </div>
+    <div id="rpCalendarioLista"></div>`;
+  rpRenderProximosPlaneados();
+  rpRenderCalendarioHistorial();
+}
+function rpCalendarioFiltrar(f) { rpCalFiltro = f; rpRenderCalendario(); }
+function rpDentroFiltroCal(fechaISO) {
+  if (rpCalFiltro === 'todo') return true;
+  if (!fechaISO) return false;
+  const d = new Date(fechaISO); if (isNaN(d.getTime())) return false;
+  const ahora = new Date();
+  if (rpCalFiltro === 'semana') { const dias = (ahora - d) / 86400000; return dias >= 0 && dias <= 7; }
+  if (rpCalFiltro === 'mes') return d.getFullYear() === ahora.getFullYear() && d.getMonth() === ahora.getMonth();
+  if (rpCalFiltro === 'anio') return d.getFullYear() === ahora.getFullYear();
+  return true;
+}
+function rpFormatoFechaUso(fechaISO) {
+  const d = new Date(fechaISO); if (isNaN(d.getTime())) return fechaISO;
+  return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+function rpRenderProximosPlaneados() {
+  const cont = document.getElementById('rpProximosPlaneados'); if (!cont) return;
+  const hoy = hoyISO().slice(0, 10);
+  const planeados = ((DATA.ropa && DATA.ropa.outfits_sugeridos) || []).filter(o => o.Fecha && !rpEsVerdadero(o.Papelera) && o.Fecha.slice(0, 10) >= hoy).sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
+  if (!planeados.length) { cont.innerHTML = '<p class="hint">Nada planeado todavía.</p>'; return; }
+  cont.innerHTML = '<p class="hint" style="margin-bottom:6px">Próximos planeados:</p><div class="loading">Cargando…</div>';
+  rpObtenerManiquiBase(rpGenero()).then(maniqui => {
+    const c = document.getElementById('rpProximosPlaneados'); if (!c) return;
+    c.innerHTML = '<p class="hint" style="margin-bottom:6px">Próximos planeados:</p><div style="display:flex;gap:10px;flex-wrap:wrap">' + planeados.map(o => rpOutfitGuardadoCardHtml(o, maniqui)).join('') + '</div>';
+  });
+}
+function rpRenderCalendarioHistorial() {
+  const cont = document.getElementById('rpCalendarioLista'); if (!cont) return;
+  const eventos = ((DATA.ropa && DATA.ropa.usos) || []).filter(u => u.Fecha && rpDentroFiltroCal(u.Fecha)).slice().sort((a, b) => new Date(b.Fecha) - new Date(a.Fecha));
+  if (!eventos.length) { cont.innerHTML = '<p class="hint">No hay outfits registrados en este período.</p>'; return; }
+  cont.innerHTML = '<div class="loading">Cargando…</div>';
+  rpObtenerManiquiBase(rpGenero()).then(maniqui => {
+    const c = document.getElementById('rpCalendarioLista'); if (!c) return;
+    c.innerHTML = eventos.map(u => rpUsoCardHtml(u, maniqui)).join('');
+  });
+}
+function rpUsoCardHtml(u, maniqui) {
+  let ids = []; try { ids = JSON.parse(u.PrendaIDsJSON || '[]'); } catch (e) { }
+  const prendas = ids.map(id => rpFindPrenda(id)).filter(Boolean);
+  const capasHtml = (maniqui && maniqui.url) ? `<img class="rp-doll-img" src="${maniqui.url}">` + prendas.map(p => p.FotoGeneradaURL ? `<img class="rp-doll-img" src="${p.FotoGeneradaURL}">` : '').join('') : '';
+  const fechaVal = u.Fecha && !isNaN(new Date(u.Fecha).getTime()) ? new Date(u.Fecha).toISOString().slice(0, 10) : '';
+  const meta = [u.Evento, u.ClimaTexto].filter(Boolean).join(' · ');
+  return `<div class="card" style="margin-bottom:12px">
+    ${capasHtml ? `<div class="rp-doll-wrap" style="max-width:160px;margin:0 auto">${capasHtml}</div>` : ''}
+    <div class="hint" style="margin-top:8px;font-weight:600;text-transform:capitalize">${escapeHtml(rpFormatoFechaUso(u.Fecha))}</div>
+    ${meta ? `<div class="hint" style="font-size:12px">${escapeHtml(meta)}</div>` : ''}
+    <details style="margin-top:6px">
+      <summary class="hint" style="cursor:pointer">Ver prendas y editar</summary>
+      <div class="field" style="margin-top:8px"><label class="hint">Fecha</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="date" id="rpFechaUso-${u.ID}" value="${fechaVal}" style="flex:1;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <button class="btn btn-sec btn-sm" onclick="rpGuardarFechaUso('${u.ID}', document.getElementById('rpFechaUso-${u.ID}').value)">💾</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;overflow-x:auto;margin-top:8px">${prendas.length ? prendas.map(p => rpFotoHtml(p, { estilo: 'height:56px;flex:none', clickable: false })).join('') : '<p class="hint">Esas prendas ya no están en tu catálogo.</p>'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-sec btn-sm" onclick="rpEditarPrendasDeUso('${u.ID}')">✏️ Editar prendas</button>
+        <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="rpEliminarUso('${u.ID}')">🗑 Eliminar</button>
+      </div>
+    </details>
+  </div>`;
+}
+async function rpGuardarFechaUso(id, valorFecha) {
+  const u = ((DATA.ropa && DATA.ropa.usos) || []).find(x => x.ID === id); if (!u) return;
+  const fechaIso = valorFecha ? new Date(valorFecha).toISOString() : '';
+  const row = Object.assign({}, u, { Fecha: fechaIso });
+  const res = await apiCall('saveRowRopa', { table: 'USOS', row });
+  if (!res.ok) { alert('Error: ' + (res.error || 'sin conexión')); return; }
+  u.Fecha = fechaIso;
+  showToast('✓ Fecha actualizada');
+  rpRenderCalendarioHistorial();
+}
+function rpEliminarUso(id) {
+  pedirConfirmacion('Eliminar', '¿Eliminar este registro de outfit usado?', () => {
+    apiCall('deleteRowRopa', { table: 'USOS', id }).then(res => {
+      if (!res.ok) { alert('Error: ' + res.error); return; }
+      DATA.ropa.usos = (DATA.ropa.usos || []).filter(u => u.ID !== id);
+      showToast('Eliminado');
+      rpRenderCalendarioHistorial();
+    });
+  });
+}
+// Reusa rpOutfitBoard (el mismo armador del Vestidor) para editar las
+// prendas de un día ya registrado (USOS), o para planificar uno nuevo
+// (OUTFITS_SUGERIDOS con Fecha) — mismo truco de guardar/restaurar
+// rpOutfitBoardGuardado que rpEditarOutfitGuardado.
+let rpUsoEditando = null;
+function rpEditarPrendasDeUso(id) {
+  const u = ((DATA.ropa && DATA.ropa.usos) || []).find(x => x.ID === id); if (!u) return;
+  let ids = []; try { ids = JSON.parse(u.PrendaIDsJSON || '[]'); } catch (e) { }
+  rpOutfitBoardGuardado = rpOutfitBoard;
+  rpUsoEditando = u;
+  rpOutfitBoard = { capas: ids.filter(x => rpFindPrenda(x)) };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'rpEditarUsoOverlay';
+  overlay.innerHTML = `<div class="modal-sheet">
+    <div class="modal-title">Editar prendas de este día</div>
+    <p class="hint">Igual que el Vestidor: ▲▼ para el orden, ‹› para cambiar de prenda.</p>
+    <div class="rp-doll-wrap" id="rpDollWrap"><p class="hint" style="padding:60px 0;text-align:center">Cargando maniquí…</p></div>
+    <div id="rpCapasLista" style="margin-top:10px"></div>
+    <button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="rpAbrirAgregarCapa()">➕ Agregar prenda</button>
+    <div class="modal-actions">
+      <button class="btn btn-sec" id="rpEditarUsoCancelar">Cancelar</button>
+      <button class="btn" id="rpEditarUsoGuardar">💾 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) rpCerrarEditarUso(false); });
+  overlay.querySelector('#rpEditarUsoCancelar').onclick = () => rpCerrarEditarUso(false);
+  overlay.querySelector('#rpEditarUsoGuardar').onclick = () => rpCerrarEditarUso(true);
+  rpRenderPreview();
+  rpRenderCapasLista();
+}
+async function rpCerrarEditarUso(guardar) {
+  const overlay = document.getElementById('rpEditarUsoOverlay');
+  if (guardar && rpUsoEditando) {
+    const u = rpUsoEditando;
+    const row = Object.assign({}, u, { PrendaIDsJSON: JSON.stringify(rpOutfitBoard.capas.filter(id => rpFindPrenda(id))) });
+    const res = await apiCall('saveRowRopa', { table: 'USOS', row });
+    if (!res.ok) alert('Error: ' + (res.error || 'sin conexión'));
+    else { Object.assign(u, row); showToast('✓ Actualizado'); }
+  }
+  if (overlay) overlay.remove();
+  rpOutfitBoard = rpOutfitBoardGuardado;
+  rpOutfitBoardGuardado = null;
+  rpUsoEditando = null;
+  rpRenderCalendarioHistorial();
+}
+function rpAbrirPlanificarDia() {
+  rpOutfitBoardGuardado = rpOutfitBoard;
+  rpOutfitBoard = { capas: [] };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'rpPlanificarOverlay';
+  overlay.innerHTML = `<div class="modal-sheet">
+    <div class="modal-title">Planificar un día</div>
+    <div class="field"><label class="hint">Fecha</label><input type="date" id="rpPlanificarFecha" value="${hoyISO().slice(0, 10)}" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)"></div>
+    <div class="rp-doll-wrap" id="rpDollWrap" style="margin-top:10px"><p class="hint" style="padding:60px 0;text-align:center">Cargando maniquí…</p></div>
+    <div id="rpCapasLista" style="margin-top:10px"></div>
+    <button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="rpAbrirAgregarCapa()">➕ Agregar prenda</button>
+    <div class="modal-actions">
+      <button class="btn btn-sec" id="rpPlanificarCancelar">Cancelar</button>
+      <button class="btn" id="rpPlanificarGuardar">📅 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) rpCerrarPlanificar(false); });
+  overlay.querySelector('#rpPlanificarCancelar').onclick = () => rpCerrarPlanificar(false);
+  overlay.querySelector('#rpPlanificarGuardar').onclick = () => rpCerrarPlanificar(true);
+  rpRenderPreview();
+  rpRenderCapasLista();
+}
+async function rpCerrarPlanificar(guardar) {
+  const overlay = document.getElementById('rpPlanificarOverlay');
+  if (guardar) {
+    const ids = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
+    const valorFecha = document.getElementById('rpPlanificarFecha').value;
+    if (!ids.length) { showToast('Agrega al menos una prenda'); return; }
+    if (!valorFecha) { showToast('Elige una fecha'); return; }
+    const fechaIso = new Date(valorFecha).toISOString();
+    const res = await apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: fechaIso, PrendaIDsJSON: JSON.stringify(ids), Papelera: false } });
+    if (!res.ok) { alert('Error: ' + (res.error || 'sin conexión')); return; }
+    DATA.ropa.outfits_sugeridos = DATA.ropa.outfits_sugeridos || []; DATA.ropa.outfits_sugeridos.push(res.row);
+    showToast('✓ Planeado');
+  }
+  if (overlay) overlay.remove();
+  rpOutfitBoard = rpOutfitBoardGuardado;
+  rpOutfitBoardGuardado = null;
+  rpRenderCalendario();
 }
 
 // ============================================================================
