@@ -306,6 +306,8 @@ a{color:var(--accent)}
       <span class="pill on" data-sec="catalogo" onclick="rpSetSection('catalogo')">👕 Catálogo</span>
       <span class="pill" data-sec="vestidor" onclick="rpSetSection('vestidor')">👗 Vestidor</span>
       <span class="pill" data-sec="ideas" onclick="rpSetSection('ideas')">✨ Ideas</span>
+      <span class="pill" data-sec="outfits" onclick="rpSetSection('outfits')">💾 Outfits</span>
+      <span class="pill" data-sec="perfil" onclick="rpSetSection('perfil')">👤 Perfil</span>
     </div>
     <div id="rpContent"><div class="loading">Cargando…</div></div>
     <button class="fab" id="rpFab" onclick="abrirModalPrenda()">+</button>
@@ -1506,10 +1508,42 @@ function rpReposicionarCapaConRegla(dataUrl, bboxPct, regla) {
 function rpReposicionarCapa(dataUrl, bboxPct, categoria, tipo) { return rpReposicionarCapaConRegla(dataUrl, bboxPct, rpReglaAnclaParaPrenda(categoria, tipo)); }
 
 // ---- maniquí base compartido (cacheado en localStorage + tabla MANIQUI_BASE) ----
-function rpGenero() { return localStorage.getItem('centro_rp_maniqui_genero') || 'mujer'; }
-function rpSetGenero(g) { localStorage.setItem('centro_rp_maniqui_genero', g); rpRenderPreview(); document.querySelectorAll('#rpGeneroPills .pill').forEach(p => p.classList.toggle('on', p.dataset.g === g)); }
+// Género/estatura se guardan en localStorage (instantáneo) Y en PERFIL.ManiquiGenero/
+// ManiquiEstatura (para que el otro dispositivo/navegador de la misma persona recoja
+// la misma elección sin tener que volver a elegirla) — igual que ropa.html.
+function rpGenero() {
+  const local = localStorage.getItem('centro_rp_maniqui_genero');
+  if (local) return local;
+  const p = ((DATA.ropa && DATA.ropa.perfil) || [])[0];
+  return (p && p.ManiquiGenero) || 'mujer';
+}
+function rpEstatura() {
+  const local = localStorage.getItem('centro_rp_maniqui_estatura');
+  if (local) return local;
+  const p = ((DATA.ropa && DATA.ropa.perfil) || [])[0];
+  return (p && p.ManiquiEstatura) || 'chaparrita';
+}
+async function rpGuardarCampoPerfil(campo, valor) {
+  DATA.ropa.perfil = DATA.ropa.perfil || [];
+  const anterior = DATA.ropa.perfil[0] || {};
+  const row = Object.assign({}, anterior, { [campo]: valor });
+  const res = await apiCall('saveRowRopa', { table: 'PERFIL', row });
+  if (res.ok) DATA.ropa.perfil[0] = res.row;
+}
+function rpSetGenero(g) {
+  localStorage.setItem('centro_rp_maniqui_genero', g);
+  rpGuardarCampoPerfil('ManiquiGenero', g);
+  rpRenderPreview();
+  document.querySelectorAll('#rpGeneroPills .pill').forEach(p => p.classList.toggle('on', p.dataset.g === g));
+}
+function rpSetEstatura(e) {
+  localStorage.setItem('centro_rp_maniqui_estatura', e);
+  rpGuardarCampoPerfil('ManiquiEstatura', e);
+  if (rpSection === 'vestidor') rpRenderPreview();
+  if (rpSection === 'perfil') rpRenderPerfil();
+}
 async function rpObtenerManiquiBase(genero) {
-  const estatura = 'chaparrita';
+  const estatura = rpEstatura();
   const cacheKey = 'centro_rp_maniqui_' + RP_MANIQUI_BASE_VERSION + '_' + genero + '_' + estatura;
   const cached = localStorage.getItem(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch (e) { } }
@@ -1581,6 +1615,8 @@ function rpSetSection(sec) {
 function rpRender() {
   if (rpSection === 'catalogo') rpRenderCatalogo();
   else if (rpSection === 'ideas') rpRenderIdeas();
+  else if (rpSection === 'outfits') rpRenderOutfits();
+  else if (rpSection === 'perfil') rpRenderPerfil();
   else rpRenderVestidor();
 }
 function rpRenderCatalogo() {
@@ -1838,8 +1874,9 @@ function rpGuardarOutfit() {
   const ids = rpOutfitBoard.capas.filter(id => rpFindPrenda(id));
   if (!ids.length) { showToast('Agrega al menos una prenda'); return; }
   const nota = prompt('¿Notas para este outfit? (opcional)') || '';
-  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: hoyISO(), PrendaIDsJSON: JSON.stringify(ids), Motivo: nota, Papelera: false } }).then(res => {
+  apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: '', PrendaIDsJSON: JSON.stringify(ids), Motivo: nota, Papelera: false } }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
+    DATA.ropa.outfits_sugeridos = DATA.ropa.outfits_sugeridos || []; DATA.ropa.outfits_sugeridos.push(res.row);
     showToast('✓ Outfit guardado');
   });
 }
@@ -1924,8 +1961,146 @@ function rpUsarIdeaHoy(prendaIds, evento) {
 function rpGuardarIdea(prendaIds, motivo, evento) {
   apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: { Fecha: '', PrendaIDsJSON: JSON.stringify(prendaIds), Motivo: motivo || '', Evento: evento || '', Papelera: false } }).then(res => {
     if (!res.ok) { alert('Error: ' + res.error); return; }
+    DATA.ropa.outfits_sugeridos = DATA.ropa.outfits_sugeridos || []; DATA.ropa.outfits_sugeridos.push(res.row);
     showToast('✓ Outfit guardado');
   });
+}
+
+// ---- Vestidor: Outfits guardados (galería) ----
+function rpRenderOutfits() {
+  const el = document.getElementById('rpContent');
+  const guardados = ((DATA.ropa && DATA.ropa.outfits_sugeridos) || []).filter(o => !o.Fecha && !rpEsVerdadero(o.Papelera));
+  if (!guardados.length) { el.innerHTML = '<div class="card"><div class="empty-state">Todavía no guardaste ningún outfit — desde Vestidor o Ideas, dale "💾 Guardar".</div></div>'; return; }
+  el.innerHTML = '<p class="hint">Cargando…</p>';
+  rpObtenerManiquiBase(rpGenero()).then(maniqui => {
+    const cont = document.getElementById('rpContent'); if (!cont) return;
+    cont.innerHTML = guardados.map(o => rpOutfitGuardadoCardHtml(o, maniqui)).join('');
+  });
+}
+function rpOutfitGuardadoCardHtml(o, maniqui) {
+  let ids = []; try { ids = JSON.parse(o.PrendaIDsJSON || '[]'); } catch (e) { }
+  const prendas = ids.map(id => rpFindPrenda(id)).filter(Boolean);
+  const capasHtml = (maniqui && maniqui.url)
+    ? `<img class="rp-doll-img" src="${maniqui.url}">` + prendas.map(p => p.FotoGeneradaURL ? `<img class="rp-doll-img" src="${p.FotoGeneradaURL}">` : '').join('')
+    : '<p class="hint" style="padding:30px 0;text-align:center">No se pudo cargar el maniquí</p>';
+  return `<div class="card" style="margin-bottom:12px">
+    <div class="rp-doll-wrap" style="max-width:200px;margin:0 auto">${capasHtml}</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0">${prendas.length ? prendas.map(p => rpFotoHtml(p, { estilo: 'height:56px;flex:none', clickable: false })).join('') : '<p class="hint">Esas prendas ya no están en tu catálogo.</p>'}</div>
+    ${o.Evento ? `<p class="hint">${escapeHtml(o.Evento)}</p>` : ''}
+    ${o.Motivo ? `<div class="hint" style="font-size:13px">${escapeHtml(o.Motivo)}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-sec btn-sm" onclick='rpUsarIdeaHoy(${JSON.stringify(ids)}, ${JSON.stringify(o.Evento || '')})'>Usar hoy</button>
+      <button class="btn btn-sec btn-sm" onclick="rpEditarOutfitGuardado('${o.ID}')">✏️ Editar</button>
+      <button class="btn btn-sec btn-sm" style="color:var(--red)" onclick="rpEliminarOutfitGuardado('${o.ID}')">🗑</button>
+    </div>
+  </div>`;
+}
+function rpEliminarOutfitGuardado(id) {
+  if (!confirm('¿Eliminar este outfit guardado?')) return;
+  apiCall('deleteRowRopa', { table: 'OUTFITS_SUGERIDOS', id }).then(res => {
+    if (!res.ok) { alert('Error: ' + res.error); return; }
+    DATA.ropa.outfits_sugeridos = (DATA.ropa.outfits_sugeridos || []).filter(o => o.ID !== id);
+    showToast('Outfit eliminado');
+    rpRender();
+  });
+}
+// Reusa el mismo mini-armador del Vestidor (rpOutfitBoard, rpRenderPreview,
+// rpRenderCapasLista, carrusel, agregar/mover/quitar) apuntando temporalmente
+// a las prendas de este outfit guardado, dentro de un modal con sus propios
+// #rpDollWrap/#rpCapasLista — al cerrar se restaura el outfitBoard real del
+// Vestidor (si había uno en progreso) sin perderlo.
+let rpOutfitEditando = null;
+let rpOutfitBoardGuardado = null;
+function rpEditarOutfitGuardado(id) {
+  const o = ((DATA.ropa && DATA.ropa.outfits_sugeridos) || []).find(x => x.ID === id); if (!o) return;
+  let ids = []; try { ids = JSON.parse(o.PrendaIDsJSON || '[]'); } catch (e) { }
+  rpOutfitBoardGuardado = rpOutfitBoard;
+  rpOutfitEditando = o;
+  rpOutfitBoard = { capas: ids.filter(x => rpFindPrenda(x)) };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'rpEditarOutfitOverlay';
+  overlay.innerHTML = `<div class="modal-sheet">
+    <div class="modal-title">Editar outfit</div>
+    <p class="hint">Igual que el Vestidor: ▲▼ para el orden, ‹› para cambiar de prenda.</p>
+    <div class="rp-doll-wrap" id="rpDollWrap"><p class="hint" style="padding:60px 0;text-align:center">Cargando maniquí…</p></div>
+    <div id="rpCapasLista" style="margin-top:10px"></div>
+    <button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="rpAbrirAgregarCapa()">➕ Agregar prenda</button>
+    <div class="modal-actions">
+      <button class="btn btn-sec" id="rpEditarOutfitCancelar">Cancelar</button>
+      <button class="btn" id="rpEditarOutfitGuardar">💾 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) rpCerrarEditarOutfitGuardado(false); });
+  overlay.querySelector('#rpEditarOutfitCancelar').onclick = () => rpCerrarEditarOutfitGuardado(false);
+  overlay.querySelector('#rpEditarOutfitGuardar').onclick = () => rpCerrarEditarOutfitGuardado(true);
+  rpRenderPreview();
+  rpRenderCapasLista();
+}
+async function rpCerrarEditarOutfitGuardado(guardar) {
+  const overlay = document.getElementById('rpEditarOutfitOverlay');
+  if (guardar && rpOutfitEditando) {
+    const o = rpOutfitEditando;
+    o.PrendaIDsJSON = JSON.stringify(rpOutfitBoard.capas.filter(id => rpFindPrenda(id)));
+    const res = await apiCall('saveRowRopa', { table: 'OUTFITS_SUGERIDOS', row: o });
+    if (!res.ok) { alert('Error: ' + res.error); }
+    else showToast('✓ Outfit actualizado');
+  }
+  if (overlay) overlay.remove();
+  rpOutfitBoard = rpOutfitBoardGuardado;
+  rpOutfitBoardGuardado = null;
+  rpOutfitEditando = null;
+  rpRender();
+}
+
+// ---- Vestidor: Perfil (tono/subtono, ciudad, género+estatura del maniquí) ----
+function rpRenderPerfil() {
+  const el = document.getElementById('rpContent');
+  const p = ((DATA.ropa && DATA.ropa.perfil) || [])[0] || {};
+  const genero = rpGenero(), estatura = rpEstatura();
+  el.innerHTML = `
+    <div class="card">
+      <div class="field"><label class="hint">Tono de piel</label>
+        <select id="rpPerfilTono" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <option value="">Sin definir</option>
+          ${['Claro', 'Medio', 'Moreno', 'Oscuro'].map(o => `<option ${p.TonoPiel === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="hint">Subtono</label>
+        <select id="rpPerfilSubtono" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+          <option value="">Sin definir</option>
+          ${['Frío', 'Cálido', 'Neutro'].map(o => `<option ${p.Subtono === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="hint">Ciudad (para el clima)</label>
+        <input type="text" id="rpPerfilCiudad" value="${escapeHtml(p.Ciudad || '')}" placeholder="Ciudad de México" style="width:100%;padding:8px;border:1px solid var(--border2);border-radius:8px;background:var(--card2);color:var(--ink)">
+      </div>
+      <div class="field" style="margin-top:14px"><label class="hint">Maniquí del Vestidor (genérico, no eres tú)</label>
+        <div class="pill-group" id="rpPerfilGeneroPills" style="margin-top:4px">
+          <span class="pill ${genero === 'mujer' ? 'on' : ''}" onclick="rpSetGenero('mujer'); rpRenderPerfil()">🧍‍♀️ Mujer</span>
+          <span class="pill ${genero === 'hombre' ? 'on' : ''}" onclick="rpSetGenero('hombre'); rpRenderPerfil()">🧍 Hombre</span>
+        </div>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="hint">Estatura del maniquí</label>
+        <div class="pill-group" id="rpPerfilEstaturaPills" style="margin-top:4px">
+          ${[['chaparrita', '📏 Chaparrita'], ['media', '📏 Media'], ['alta', '📏 Alta']].map(([v, l]) => `<span class="pill ${estatura === v ? 'on' : ''}" onclick="rpSetEstatura('${v}'); rpRenderPerfil()">${l}</span>`).join('')}
+        </div>
+      </div>
+      <button class="btn" style="margin-top:16px" onclick="rpGuardarPerfilDatos()">Guardar perfil</button>
+    </div>`;
+}
+async function rpGuardarPerfilDatos() {
+  const p = ((DATA.ropa && DATA.ropa.perfil) || [])[0] || {};
+  const row = Object.assign({}, p, {
+    TonoPiel: document.getElementById('rpPerfilTono').value,
+    Subtono: document.getElementById('rpPerfilSubtono').value,
+    Ciudad: document.getElementById('rpPerfilCiudad').value.trim()
+  });
+  const res = await apiCall('saveRowRopa', { table: 'PERFIL', row });
+  if (!res.ok) { alert('Error: ' + res.error); return; }
+  DATA.ropa.perfil = [res.row];
+  showToast('✓ Perfil guardado');
 }
 
 // ============================================================================
